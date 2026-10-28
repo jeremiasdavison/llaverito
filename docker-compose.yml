@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: llaverito
+      POSTGRES_USER: llaverito
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definí POSTGRES_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      LLAVERITO_DATABASE_URL: postgresql://llaverito:${POSTGRES_PASSWORD}@db:5432/llaverito
+      LLAVERITO_MASTER_KEY_FILE: /run/secrets/llaverito_master_key
+      LLAVERITO_COOKIE_SECURE: "true"
+      LLAVERITO_PUBLIC_HOSTS: ${LLAVERITO_PUBLIC_HOSTS:-}
+      LLAVERITO_AD_API_URL: ${LLAVERITO_AD_API_URL:-}
+      LLAVERITO_AD_JWT_KEY: ${LLAVERITO_AD_JWT_KEY:-}
+      LLAVERITO_AD_ADMIN_GROUPS: ${LLAVERITO_AD_ADMIN_GROUPS:-}
+      LLAVERITO_AD_EDITOR_GROUPS: ${LLAVERITO_AD_EDITOR_GROUPS:-}
+      LLAVERITO_AD_ALLOWED_GROUPS: ${LLAVERITO_AD_ALLOWED_GROUPS:-}
+      LLAVERITO_AD_V2_URL: ${LLAVERITO_AD_V2_URL:-}
+      LLAVERITO_AD_V2_API_KEY: ${LLAVERITO_AD_V2_API_KEY:-}
+    secrets: [llaverito_master_key]
+    ports:
+      - "127.0.0.1:8000:8000" # publicar detrás de un proxy TLS (nginx/traefik), no directo
+
+secrets:
+  llaverito_master_key:
+    file: ./master.key
+
+volumes:
+  pgdata:
