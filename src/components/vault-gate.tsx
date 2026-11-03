@@ -113,10 +113,10 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
 
   if (!profile || !session) {
     return (
-      <section className="panel" style={{ padding: 16, maxWidth: 560 }}>
-        <h1>{profile ? "Abrir bóveda" : "Crear Secret Key"}</h1>
+      <section className="sheet">
+        <h1>{profile ? "Abrir la bóveda" : "Armar la bóveda"}</h1>
         <p className="note">
-          El cifrado ocurre en este navegador. Supabase guarda usuarios, carpetas y ciphertext. La Secret Key no se envía ni se guarda.
+          La contraseña y la Secret Key se quedan en este navegador. El servidor solo guarda el sobre.
         </p>
         {error ? <p className="alert" role="alert">{error}</p> : null}
         {!profile ? (

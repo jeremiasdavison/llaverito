@@ -38,6 +38,7 @@ export function VaultClient() {
   const [secret, setSecret] = useState<string | null>(null);
   const [shares, setShares] = useState<ShareRow[]>([]);
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [panel, setPanel] = useState<"save" | "show" | "share" | "env" | null>("save");
 
   async function load() {
     const data = await api<{ folders: Folder[]; items: VaultItem[] }>("/api/vault");
@@ -175,15 +176,17 @@ export function VaultClient() {
 
   return (
     <section>
-      <h1>Bóveda</h1>
-      <p className="note">La lista no trae secretos. Revelar uno es una acción aparte y queda en la auditoría.</p>
+      <div className="vault-head">
+        <h1>{folder ? folder.name : "Bóveda"}</h1>
+        <p className="note">{visible.length === 1 ? "1 llave" : `${visible.length} llaves`}</p>
+      </div>
       {error ? <p className="alert" role="alert">{error}</p> : null}
       <div className="layout">
-        <div className="stack">
+        <div className="ring">
           {folders.map((entry) => (
             <button
               key={entry.id}
-              className="list-btn"
+              className="bow"
               type="button"
               aria-pressed={entry.id === selected}
               onClick={() => {
@@ -192,37 +195,40 @@ export function VaultClient() {
                 setError(null);
               }}
             >
-              <strong>{entry.name}</strong>
-              <div className="tag">{entry.kind === "project" ? "proyecto" : "personal"}</div>
+              <span aria-hidden="true" />
+              <div>
+                {entry.name}
+                <small>{entry.kind === "project" ? "Proyecto" : "Personal"}</small>
+              </div>
             </button>
           ))}
-          <form className="stack" onSubmit={(event) => void onCreateFolder(event).catch((cause: Error) => setError(cause.message))}>
+          <form className="ticket" onSubmit={(event) => void onCreateFolder(event).catch((cause: Error) => setError(cause.message))}>
+            <h2>Nueva carpeta</h2>
             <label>
-              Nueva carpeta de proyecto
-              <input name="name" required maxLength={80} placeholder="Nombre" />
+              Nombre
+              <input name="name" required maxLength={80} />
             </label>
             <label>
-              Repo de GitHub
+              Repo, si corresponde
               <input name="githubRepo" placeholder="owner/repo" />
             </label>
             <button className="btn" type="submit">Crear carpeta</button>
           </form>
         </div>
-        <div className="stack">
+        <div>
           {folder ? (
             <>
-              <h2>{folder.name}</h2>
-              {folder.githubRepo ? <p className="note">Repo {folder.githubRepo}</p> : null}
-              <div className="table">
-                {visible.length === 0 ? <p className="note">Todavía no hay elementos.</p> : null}
+              {folder.githubRepo ? <p className="note">Vinculada a {folder.githubRepo}</p> : null}
+              <div>
+                {visible.length === 0 ? <p>Esta carpeta no tiene llaves. Guardá la primera abajo.</p> : null}
                 {visible.map((entry) => (
-                  <article key={entry.id} className={`row ${entry.revokedAt ? "revoked" : ""}`}>
+                  <article key={entry.id} className={`key-row ${entry.revokedAt ? "revoked" : ""}`}>
                     <div>
                       <strong>{entry.name}</strong>
-                      <div className="note">{entry.fingerprint ?? "sin huella"}</div>
+                      <div className="note">{entry.fingerprint ?? "Sin huella"}</div>
                     </div>
-                    <div className="tag">{entry.kind === "api_key" ? "API" : "SSH"}</div>
-                    <div>{entry.revokedAt ? "revocado" : entry.access}</div>
+                    <div>{entry.kind === "api_key" ? "API" : "SSH"}</div>
+                    <div>{entry.revokedAt ? "Revocada" : entry.access === "owner" ? "Dueño" : entry.access === "admin" ? "Admin" : "Uso"}</div>
                     {canAdmin && !entry.revokedAt ? (
                       <button className="btn-danger" type="button" onClick={() => void revoke(entry.id).catch((cause: Error) => setError(cause.message))}>
                         Revocar
@@ -232,8 +238,25 @@ export function VaultClient() {
                 ))}
               </div>
               {canAdmin ? (
-                <form className="panel" onSubmit={(event) => void onCreateItem(event).catch((cause: Error) => setError(cause.message))} style={{ padding: 16 }}>
-                  <h3>Nuevo secreto</h3>
+                <div className="ticket-actions">
+                  {(["save", "show", "share", "env"] as const)
+                    .filter((name) => name !== "env" || folder.kind === "project")
+                    .map((name) => (
+                      <button
+                        key={name}
+                        className={panel === name ? "btn" : "btn-ghost"}
+                        type="button"
+                        aria-pressed={panel === name}
+                        onClick={() => setPanel(name)}
+                      >
+                        {name === "save" ? "Guardar" : name === "show" ? "Mostrar" : name === "share" ? "Compartir" : "Variables"}
+                      </button>
+                    ))}
+                </div>
+              ) : null}
+              {canAdmin && panel === "save" ? (
+                <form className="sheet" onSubmit={(event) => void onCreateItem(event).catch((cause: Error) => setError(cause.message))}>
+                  <h2>Guardar una llave</h2>
                   <label>
                     Nombre
                     <input name="name" required maxLength={120} />
@@ -250,20 +273,21 @@ export function VaultClient() {
                     <textarea name="secret" required minLength={8} autoComplete="off" spellCheck={false} />
                   </label>
                   <label>
-                    Clave pública SSH, opcional
-                    <textarea name="publicKey" spellCheck={false} placeholder="ssh-ed25519 AAAA... comentario" />
+                    Clave pública SSH, si la tenés
+                    <textarea name="publicKey" spellCheck={false} placeholder="ssh-ed25519 AAAA..." />
                   </label>
-                  <button className="btn" type="submit">Guardar cifrado</button>
+                  <button className="btn" type="submit">Guardar cifrada</button>
                 </form>
               ) : null}
-              {canAdmin && visible.some((entry) => !entry.revokedAt) ? (
-                <form className="panel" style={{ padding: 16 }} onSubmit={(event) => {
+              {canAdmin && panel === "show" && visible.some((entry) => !entry.revokedAt) ? (
+                <form className="sheet" onSubmit={(event) => {
                   const id = String(new FormData(event.currentTarget).get("itemId") ?? "");
                   void unlock(event, id).catch((cause: Error) => setError(cause.message));
                 }}>
-                  <h3>Revelar</h3>
+                  <h2>Mostrar una vez</h2>
+                  <p className="note">Se descifra en este navegador. Queda anotado en la auditoría.</p>
                   <label>
-                    Elemento
+                    Llave
                     <select name="itemId">
                       {visible.filter((entry) => !entry.revokedAt).map((entry) => (
                         <option key={entry.id} value={entry.id}>{entry.name}</option>
@@ -272,9 +296,9 @@ export function VaultClient() {
                   </label>
                   <label className="check">
                     <input name="confirm" type="checkbox" required />
-                    Entiendo que el secreto se va a mostrar en esta pantalla.
+                    Mostrala en esta pantalla.
                   </label>
-                  <button className="btn-ghost" type="submit">Mostrar una vez</button>
+                  <button className="btn" type="submit">Mostrar</button>
                   {secret ? (
                     <label>
                       Secreto
@@ -286,26 +310,28 @@ export function VaultClient() {
                   ) : null}
                 </form>
               ) : null}
-              {canAdmin ? (
-                <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void onShare(event).catch((cause: Error) => setError(cause.message))}>
-                  <h3>Compartir carpeta</h3>
-                  <p className="note">Uso permite pedir inyección. Admin administra. Nadie recibe el texto plano en el permiso.</p>
+              {canAdmin && panel === "share" ? (
+                <form className="sheet" onSubmit={(event) => void onShare(event).catch((cause: Error) => setError(cause.message))}>
+                  <h2>Compartir esta carpeta</h2>
+                  <p className="note">La invitación queda pendiente hasta que envuelvas las llaves. El texto plano no sale.</p>
                   <label>
-                    Email o id de usuario
+                    Email o id
                     <input name="grantee" required />
                   </label>
                   <label>
                     Permiso
                     <select name="permission" defaultValue="use">
-                      <option value="use">uso</option>
-                      <option value="admin">admin</option>
+                      <option value="use">Uso</option>
+                      <option value="admin">Admin</option>
                     </select>
                   </label>
-                  <button className="btn" type="submit">Compartir</button>
-                  <ul>
+                  <button className="btn" type="submit">Invitar</button>
+                  <div>
                     {shares.map((share) => (
-                      <li key={share.id}>
-                        {share.granteeEmail} · {share.permission} · {share.status ?? "pending"}
+                      <div className="share-line" key={share.id}>
+                        <span>{share.granteeEmail}</span>
+                        <span>{share.permission === "admin" ? "Admin" : "Uso"}</span>
+                        <span>{share.status === "approved" ? "Envuelto" : "Pendiente"}</span>
                         {share.status !== "approved" ? (
                           <button
                             className="btn-ghost"
@@ -315,17 +341,17 @@ export function VaultClient() {
                             Aprobar y envolver
                           </button>
                         ) : null}
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </form>
               ) : null}
-              {canAdmin && folder.kind === "project" ? (
-                <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void onBind(event).catch((cause: Error) => setError(cause.message))}>
-                  <h3>Entorno virtual</h3>
-                  <p className="note">Mapeá nombres de secretos a variables. El manifiesto de abajo no tiene valores.</p>
+              {canAdmin && panel === "env" && folder.kind === "project" ? (
+                <form className="sheet" onSubmit={(event) => void onBind(event).catch((cause: Error) => setError(cause.message))}>
+                  <h2>Variables del proyecto</h2>
+                  <p className="note">El manifiesto no incluye valores.</p>
                   <label>
-                    Elemento
+                    Llave
                     <select name="itemId">
                       {visible.filter((entry) => !entry.revokedAt).map((entry) => (
                         <option key={entry.id} value={entry.id}>{entry.name}</option>
@@ -337,12 +363,12 @@ export function VaultClient() {
                     <input name="envKey" required placeholder="OPENAI_API_KEY" pattern="[A-Z][A-Z0-9_]{0,63}" />
                   </label>
                   <button className="btn" type="submit">Mapear</button>
-                  <pre className="mono">{JSON.stringify(manifest ?? { entries: [], value: null }, null, 2)}</pre>
+                  <pre className="mono">{JSON.stringify(manifest ?? { entries: [] }, null, 2)}</pre>
                 </form>
               ) : null}
             </>
           ) : (
-            <p className="note">Cargando la bóveda…</p>
+            <p>Cargando la bóveda.</p>
           )}
         </div>
       </div>
