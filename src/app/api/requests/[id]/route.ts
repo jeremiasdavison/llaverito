@@ -14,5 +14,5 @@ export const POST = (request: Request, context: Context) =>
     const actor = await requireUser();
     const { id } = await context.params;
     const body = await readJson(request, decisionSchema);
-    return json(await decideRequest(actor, id, body.action, request));
+    return json(await decideRequest(actor, id, body.action, body.sealed, request));
   });

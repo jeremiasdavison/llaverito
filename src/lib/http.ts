@@ -12,6 +12,13 @@ export function json(body: unknown, status = 200) {
   });
 }
 
+export function assertCiphertextOnly(value: unknown) {
+  const text = JSON.stringify(value);
+  if (text.includes("PRIVATE KEY") || text.includes("BEGIN ") || text.includes("secretKey")) {
+    throw new HttpError(400, "El servidor no acepta material en claro");
+  }
+}
+
 export function clientIp(request: Request): string | null {
   const forwarded = request.headers.get("x-forwarded-for");
   const value = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "";

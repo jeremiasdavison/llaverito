@@ -36,7 +36,9 @@ const ephemeral = crypto.createPublicKey({
   type: "spki",
 });
 const shared = crypto.diffieHellman({ privateKey, publicKey: ephemeral });
-const aesKey = Buffer.from(crypto.hkdfSync("sha256", shared, Buffer.alloc(0), INFO, 32));
+const aesKey = Buffer.from(
+  crypto.hkdfSync("sha256", shared, Buffer.from("llaverito-seal-salt-v1"), INFO, 32),
+);
 const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, Buffer.from(sealed.iv, "base64url"));
 decipher.setAuthTag(Buffer.from(sealed.tag, "base64url"));
 const opened = JSON.parse(

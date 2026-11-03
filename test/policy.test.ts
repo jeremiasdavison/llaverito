@@ -27,12 +27,27 @@ test("redaction and hints do not keep the secret", () => {
   assert.equal(cleaned.name, "openai");
 });
 
-test("item schema rejects an ssh blob without a private key header", () => {
-  const result = itemSchema.safeParse({
+test("item schema rejects plaintext and accepts only an envelope", () => {
+  const rejected = itemSchema.safeParse({
     folderId: "550e8400-e29b-41d4-a716-446655440000",
     name: "ci",
     kind: "ssh_key",
-    secret: "not-a-key-material",
+    secret: "-----BEGIN PRIVATE KEY-----\nabc",
   });
-  assert.equal(result.success, false);
+  assert.equal(rejected.success, false);
+  const accepted = itemSchema.safeParse({
+    folderId: "550e8400-e29b-41d4-a716-446655440000",
+    name: "ci",
+    kind: "api_key",
+    fingerprint: "••••abcd",
+    envelope: {
+      wrappedDek: "aaaaaaaa",
+      dekIv: "bbbbbbbb",
+      dekTag: "cccccccc",
+      ciphertext: "dddddddd",
+      iv: "eeeeeeee",
+      tag: "ffffffff",
+    },
+  });
+  assert.equal(accepted.success, true);
 });

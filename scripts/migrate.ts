@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
 import { statements } from "../src/lib/statements.ts";
 
 function loadLocalEnv() {
@@ -32,8 +32,12 @@ if (!url) {
   process.exit(1);
 }
 
-const sql = neon(url);
+const pool = new Pool({
+  connectionString: url,
+  ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
+});
 for (const statement of statements) {
-  await sql.query(statement);
+  await pool.query(statement);
 }
+await pool.end();
 console.log(`Schema listo (${statements.length} sentencias).`);

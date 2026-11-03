@@ -1,12 +1,11 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { ConfigError } from "./errors";
 import { schema } from "./schema";
 import { statements } from "./statements";
 
-type Sql = ReturnType<typeof neon<false, false>>;
 type Database = ReturnType<typeof drizzle<typeof schema>>;
-type Client = { sql: Sql; db: Database };
+type Client = { pool: Pool; db: Database };
 
 let client: Client | null = null;
 let ready: Promise<void> | null = null;
@@ -17,29 +16,34 @@ export function databaseUrl(): string {
   return url;
 }
 
-async function applySchema(sql: Sql) {
+function connect(): Client {
+  if (client) return client;
+  const connectionString = databaseUrl();
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
+  });
+  const created = { pool, db: drizzle(pool, { schema }) };
+  client = created;
+  return created;
+}
+
+async function applySchema(pool: Pool) {
   for (const statement of statements) {
-    await sql.query(statement);
+    await pool.query(statement);
   }
 }
 
 export async function ensureSchema() {
-  const { sql } = connect();
+  const { pool } = connect();
   if (!ready) {
-    ready = applySchema(sql).catch((error) => {
+    ready = applySchema(pool).catch((error: unknown) => {
       ready = null;
       throw error;
     });
   }
   await ready;
-}
-
-function connect(): Client {
-  if (client) return client;
-  const sql = neon(databaseUrl());
-  const created = { sql, db: drizzle(sql, { schema }) };
-  client = created;
-  return created;
 }
 
 export async function getDb() {
@@ -48,13 +52,13 @@ export async function getDb() {
   return current.db;
 }
 
-export async function getSql() {
-  const current = connect();
+export async function query<T>(text: string, params: unknown[] = []) {
+  const { pool } = connect();
   await ensureSchema();
-  return current.sql;
+  const result = await pool.query(text, params);
+  return result.rows as T[];
 }
 
 export async function pingDb() {
-  const sql = await getSql();
-  await sql`select 1 as ok`;
+  await query("select 1 as ok");
 }

@@ -149,4 +149,31 @@ export const statements = [
     count integer NOT NULL,
     expires_at timestamptz NOT NULL
   )`,
+  `ALTER TABLE share ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending'`,
+  `ALTER TABLE access_request ADD COLUMN IF NOT EXISTS sealed_payload jsonb`,
+  `ALTER TABLE access_request ADD COLUMN IF NOT EXISTS grant_token text`,
+  `CREATE TABLE IF NOT EXISTS vault_profile (
+    user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+    kdf_salt text NOT NULL,
+    kdf_iterations integer NOT NULL,
+    public_key text NOT NULL,
+    wrapped_private_key text NOT NULL,
+    private_key_iv text NOT NULL,
+    private_key_tag text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS share_item_key (
+    share_id text NOT NULL REFERENCES share(id) ON DELETE CASCADE,
+    item_id text NOT NULL REFERENCES item(id) ON DELETE CASCADE,
+    seal jsonb NOT NULL,
+    PRIMARY KEY (share_id, item_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS item_github_link (
+    id text PRIMARY KEY,
+    item_id text NOT NULL REFERENCES item(id) ON DELETE CASCADE,
+    github_repo text NOT NULL,
+    created_by text NOT NULL REFERENCES "user"(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (item_id, github_repo)
+  )`,
 ];

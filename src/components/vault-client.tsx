@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client-api";
+import { useVault } from "@/components/vault-gate";
+import { apiKeyHint, sshFingerprint, type Envelope, type SealedPayload } from "@/lib/vault-crypto";
 
 type Access = "owner" | "admin" | "use";
 type Folder = {
@@ -21,13 +23,14 @@ type VaultItem = {
   access: Access;
   sharedDirectly: boolean;
 };
-type ShareRow = { id: string; granteeEmail: string; permission: "use" | "admin" };
+type ShareRow = { id: string; granteeEmail: string; permission: "use" | "admin"; status?: string };
 type Manifest = {
   githubRepo: string | null;
   entries: { bindingId: string; envKey: string; itemName: string; revoked: boolean; value: null }[];
 };
 
 export function VaultClient() {
+  const vault = useVault();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [items, setItems] = useState<VaultItem[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -89,14 +92,19 @@ export function VaultClient() {
     event.preventDefault();
     if (!folder) return;
     const form = new FormData(event.currentTarget);
+    const secret = String(form.get("secret") ?? "");
+    const kind = String(form.get("kind") ?? "api_key");
+    const publicKey = String(form.get("publicKey") ?? "");
+    const envelope = await vault.encrypt(secret);
+    const fingerprint = kind === "ssh_key" ? await sshFingerprint(publicKey) : apiKeyHint(secret);
     await api("/api/items", {
       method: "POST",
       body: JSON.stringify({
         folderId: folder.id,
         name: String(form.get("name") ?? ""),
-        kind: String(form.get("kind") ?? "api_key"),
-        secret: String(form.get("secret") ?? ""),
-        publicKey: String(form.get("publicKey") ?? ""),
+        kind,
+        fingerprint,
+        envelope,
       }),
     });
     event.currentTarget.reset();
@@ -112,11 +120,25 @@ export function VaultClient() {
 
   async function unlock(event: React.FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
-    const data = await api<{ secret: string }>(`/api/items/${id}/unlock`, {
-      method: "POST",
-      body: JSON.stringify({ confirm: true }),
-    });
-    setSecret(data.secret);
+    const material = await api<Envelope & { mode: "owner" | "shared"; seal?: SealedPayload }>(`/api/items/${id}/envelope`);
+    const opened = material.mode === "shared" && material.seal
+      ? await vault.openShared(material, material.seal)
+      : await vault.decryptOwned(material);
+    setSecret(opened);
+    await api(`/api/items/${id}/unlock`, { method: "POST", body: JSON.stringify({ confirm: true }) });
+  }
+
+  async function wrapShare(share: ShareRow) {
+    const key = await api<{ publicKey: string }>(`/api/vault/public-key?email=${encodeURIComponent(share.granteeEmail)}`);
+    const targets = visible.filter((entry) => !entry.revokedAt);
+    const wraps = [];
+    for (const entry of targets) {
+      const material = await api<Envelope>(`/api/items/${entry.id}/envelope`);
+      wraps.push({ itemId: entry.id, seal: await vault.wrapItemFor(material, key.publicKey) });
+    }
+    if (!wraps.length) throw new Error("No hay secretos activos para envolver");
+    await api(`/api/shares/${share.id}/keys`, { method: "POST", body: JSON.stringify({ wraps }) });
+    if (folder) setShares(await api(`/api/shares?resourceType=folder&resourceId=${folder.id}`));
   }
 
   async function onShare(event: React.FormEvent<HTMLFormElement>) {
@@ -282,7 +304,18 @@ export function VaultClient() {
                   <button className="btn" type="submit">Compartir</button>
                   <ul>
                     {shares.map((share) => (
-                      <li key={share.id}>{share.granteeEmail} · {share.permission}</li>
+                      <li key={share.id}>
+                        {share.granteeEmail} · {share.permission} · {share.status ?? "pending"}
+                        {share.status !== "approved" ? (
+                          <button
+                            className="btn-ghost"
+                            type="button"
+                            onClick={() => void wrapShare(share).catch((cause: Error) => setError(cause.message))}
+                          >
+                            Aprobar y envolver
+                          </button>
+                        ) : null}
+                      </li>
                     ))}
                   </ul>
                 </form>

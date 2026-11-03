@@ -11,8 +11,5 @@ export const POST = (request: Request) =>
     assertSameOrigin(request);
     const actor = await requireUser();
     const body = await readJson(request, itemSchema);
-    return json(
-      await createItem(actor, { ...body, publicKey: body.publicKey || undefined }, request),
-      201,
-    );
+    return json(await createItem(actor, body, request), 201);
   });

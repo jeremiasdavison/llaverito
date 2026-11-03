@@ -3,16 +3,15 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { folderAccess, itemAccess, requireAdminFolder, requireAdminItem } from "./access";
 import { audit } from "./audit";
-import { decryptString, encryptString, type Envelope } from "./crypto";
+import type { Envelope } from "./crypto";
 import { getDb } from "./db";
 import { HttpError } from "./errors";
-import { isUniqueViolation } from "./http";
+import { assertCiphertextOnly, isUniqueViolation } from "./http";
 import { canAdminister } from "./permissions";
 import { maxAccess } from "./permissions";
 import { consumeRateLimit } from "./rate-limit";
-import { envBinding, folder, item, share, user } from "./schema";
+import { envBinding, folder, item, itemGithubLink, share, shareItemKey, user, vaultProfile } from "./schema";
 import type { Access, Actor, ItemKind } from "./types";
-import { apiKeyHint, sshFingerprint } from "./validate";
 
 const publicItemColumns = {
   id: item.id,
@@ -73,14 +72,6 @@ function envelope(row: {
   };
 }
 
-function fingerprintFor(kind: ItemKind, secret: string, publicKey?: string) {
-  if (kind === "api_key") return apiKeyHint(secret);
-  if (!publicKey) return null;
-  const fingerprint = sshFingerprint(publicKey);
-  if (!fingerprint) throw new HttpError(400, "La clave pública SSH no se pudo leer");
-  return fingerprint;
-}
-
 async function resolveGrantee(actor: Actor, input: string) {
   const trimmed = input.trim();
   if (trimmed.includes("@")) {
@@ -134,6 +125,14 @@ export async function listVault(actor: Actor) {
     if (existing) existing.access = maxAccess(existing.access, access);
     else items.set(row.id, toPublicItem(row, access, true));
   }
+  const itemList = [...items.values()];
+  const links = await listGithubLinks(itemList.map((entry) => entry.id));
+  const reposByItem = new Map<string, string[]>();
+  for (const link of links) {
+    const list = reposByItem.get(link.itemId) ?? [];
+    list.push(link.githubRepo);
+    reposByItem.set(link.itemId, list);
+  }
   return {
     folders: [...folderMap.values()].map(({ row, access }) => ({
       id: row.id,
@@ -143,7 +142,7 @@ export async function listVault(actor: Actor) {
       createdAt: iso(row.createdAt),
       access,
     })),
-    items: [...items.values()],
+    items: itemList.map((entry) => ({ ...entry, githubRepos: reposByItem.get(entry.id) ?? [] })),
   };
 }
 
@@ -238,14 +237,17 @@ export async function deleteFolder(actor: Actor, folderId: string, request?: Req
 
 export async function createItem(
   actor: Actor,
-  input: { folderId: string; name: string; kind: ItemKind; secret: string; publicKey?: string },
+  input: {
+    folderId: string;
+    name: string;
+    kind: ItemKind;
+    fingerprint?: string | null;
+    envelope: Envelope;
+  },
   request?: Request,
 ) {
+  assertCiphertextOnly(input);
   await requireAdminFolder(actor, input.folderId);
-  if (input.kind === "ssh_key" && !input.secret.includes("PRIVATE KEY")) {
-    throw new HttpError(400, "La clave SSH tiene que incluir el bloque PRIVATE KEY");
-  }
-  const sealed = encryptString(input.secret);
   const id = crypto.randomUUID();
   const db = await getDb();
   try {
@@ -255,8 +257,8 @@ export async function createItem(
       createdBy: actor.id,
       name: input.name,
       kind: input.kind,
-      ...sealed,
-      fingerprint: fingerprintFor(input.kind, input.secret, input.publicKey || undefined),
+      ...input.envelope,
+      fingerprint: input.fingerprint ?? null,
       revokedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -306,21 +308,18 @@ export async function revokeItem(actor: Actor, itemId: string, request?: Request
 export async function rotateItem(
   actor: Actor,
   itemId: string,
-  input: { secret: string; publicKey?: string },
+  input: { fingerprint?: string | null; envelope: Envelope },
   request?: Request,
 ) {
+  assertCiphertextOnly(input);
   const { item: row } = await requireAdminItem(actor, itemId);
   if (row.revokedAt) throw new HttpError(409, "El elemento está revocado");
-  if (row.kind === "ssh_key" && !input.secret.includes("PRIVATE KEY")) {
-    throw new HttpError(400, "La clave SSH tiene que incluir el bloque PRIVATE KEY");
-  }
-  const sealed = encryptString(input.secret);
   const db = await getDb();
   await db
     .update(item)
     .set({
-      ...sealed,
-      fingerprint: fingerprintFor(row.kind, input.secret, input.publicKey || undefined),
+      ...input.envelope,
+      fingerprint: input.fingerprint ?? row.fingerprint,
       updatedAt: new Date(),
     })
     .where(eq(item.id, itemId));
@@ -340,12 +339,6 @@ export async function unlockItem(actor: Actor, itemId: string, request?: Request
   const { item: row, access } = await itemAccess(actor, itemId);
   if (!canAdminister(access)) throw new HttpError(403, "Solo un administrador puede revelar el secreto");
   if (row.revokedAt) throw new HttpError(409, "El elemento está revocado");
-  let secret = "";
-  try {
-    secret = decryptString(envelope(row));
-  } catch {
-    throw new HttpError(500, "No se pudo abrir el secreto");
-  }
   await audit({
     actorId: actor.id,
     action: "item.unlock",
@@ -354,7 +347,7 @@ export async function unlockItem(actor: Actor, itemId: string, request?: Request
     metadata: { name: row.name, kind: row.kind },
     request,
   });
-  return { id: row.id, name: row.name, kind: row.kind, secret };
+  return { id: row.id, name: row.name, kind: row.kind, secret: null };
 }
 
 export async function listShares(actor: Actor, resourceType: "folder" | "item", resourceId: string) {
@@ -366,6 +359,7 @@ export async function listShares(actor: Actor, resourceType: "folder" | "item", 
       id: share.id,
       granteeEmail: share.granteeEmail,
       permission: share.permission,
+      status: share.status,
       createdAt: share.createdAt,
     })
     .from(share)
@@ -391,12 +385,13 @@ export async function createShare(
       resourceId: input.resourceId,
       granteeEmail,
       permission: input.permission,
+      status: "pending",
       createdBy: actor.id,
       createdAt: new Date(),
     })
     .onConflictDoUpdate({
       target: [share.resourceType, share.resourceId, share.granteeEmail],
-      set: { permission: input.permission },
+      set: { permission: input.permission, status: "pending" },
     })
     .returning({
       id: share.id,
@@ -405,6 +400,7 @@ export async function createShare(
       resourceType: share.resourceType,
       resourceId: share.resourceId,
     });
+  if (saved) await db.delete(shareItemKey).where(eq(shareItemKey.shareId, saved.id));
   await audit({
     actorId: actor.id,
     action: "share.create",
@@ -520,4 +516,133 @@ export async function unbindEnv(actor: Actor, folderId: string, bindingId: strin
     metadata: { envKey: row.envKey },
     request,
   });
+}
+
+export async function getItemMaterial(actor: Actor, itemId: string) {
+  const { item: row, access } = await itemAccess(actor, itemId);
+  if (row.revokedAt) throw new HttpError(409, "El elemento está revocado");
+  const db = await getDb();
+  if (canAdminister(access)) {
+    return {
+      mode: "owner" as const,
+      ciphertext: row.ciphertext,
+      iv: row.iv,
+      tag: row.tag,
+      wrappedDek: row.wrappedDek,
+      dekIv: row.dekIv,
+      dekTag: row.dekTag,
+    };
+  }
+  const wraps = await db
+    .select({ seal: shareItemKey.seal })
+    .from(shareItemKey)
+    .innerJoin(share, eq(share.id, shareItemKey.shareId))
+    .where(and(eq(shareItemKey.itemId, itemId), eq(share.granteeEmail, actor.email), eq(share.status, "approved")));
+  const seal = wraps[0]?.seal;
+  if (!seal) throw new HttpError(403, "Todavía no hay una clave envuelta para vos");
+  return { mode: "shared" as const, ciphertext: row.ciphertext, iv: row.iv, tag: row.tag, seal };
+}
+
+export async function saveVaultProfile(
+  actor: Actor,
+  input: {
+    kdfSalt: string;
+    kdfIterations: number;
+    publicKey: string;
+    wrappedPrivateKey: string;
+    privateKeyIv: string;
+    privateKeyTag: string;
+  },
+) {
+  assertCiphertextOnly(input);
+  const db = await getDb();
+  const existing = await db.select({ userId: vaultProfile.userId }).from(vaultProfile).where(eq(vaultProfile.userId, actor.id)).limit(1);
+  if (existing[0]) throw new HttpError(409, "La bóveda ya está inicializada");
+  await db.insert(vaultProfile).values({ ...input, userId: actor.id, createdAt: new Date() });
+  return { ok: true };
+}
+
+export async function readVaultProfile(actor: Actor) {
+  const db = await getDb();
+  const [row] = await db.select().from(vaultProfile).where(eq(vaultProfile.userId, actor.id)).limit(1);
+  return row ?? null;
+}
+
+export async function publicKeyForEmail(email: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ publicKey: vaultProfile.publicKey })
+    .from(vaultProfile)
+    .innerJoin(user, eq(user.id, vaultProfile.userId))
+    .where(eq(user.email, email.toLowerCase()))
+    .limit(1);
+  if (!row) throw new HttpError(404, "Esa persona todavía no tiene bóveda");
+  return { publicKey: row.publicKey };
+}
+
+export async function approveShareKeys(
+  actor: Actor,
+  shareId: string,
+  wraps: { itemId: string; seal: Record<string, string> }[],
+  request?: Request,
+) {
+  assertCiphertextOnly(wraps);
+  const db = await getDb();
+  const [row] = await db.select().from(share).where(eq(share.id, shareId)).limit(1);
+  if (!row || row.status === "denied") throw new HttpError(404, "El permiso no existe");
+  if (row.resourceType === "folder") await requireAdminFolder(actor, row.resourceId);
+  else await requireAdminItem(actor, row.resourceId);
+  for (const wrap of wraps) {
+    const loaded = await itemAccess(actor, wrap.itemId);
+    const inScope = row.resourceType === "item" ? wrap.itemId === row.resourceId : loaded.item.folderId === row.resourceId;
+    if (!inScope) throw new HttpError(400, "El elemento no pertenece al recurso compartido");
+  }
+  await db.delete(shareItemKey).where(eq(shareItemKey.shareId, shareId));
+  await db.insert(shareItemKey).values(wraps.map((wrap) => ({ shareId, itemId: wrap.itemId, seal: wrap.seal })));
+  await db.update(share).set({ status: "approved" }).where(eq(share.id, shareId));
+  await audit({
+    actorId: actor.id,
+    action: "share.approve",
+    resourceType: row.resourceType,
+    resourceId: row.resourceId,
+    metadata: { permission: row.permission, itemCount: wraps.length },
+    request,
+  });
+  return { id: shareId, status: "approved" as const, grantId: null, confirmation: "Compartido. El texto plano no salió del navegador." };
+}
+
+export async function listGithubLinks(itemIds: string[]) {
+  if (!itemIds.length) return [];
+  const db = await getDb();
+  return db
+    .select({ itemId: itemGithubLink.itemId, githubRepo: itemGithubLink.githubRepo })
+    .from(itemGithubLink)
+    .where(inArray(itemGithubLink.itemId, itemIds));
+}
+
+export async function linkGithubRepo(actor: Actor, itemId: string, githubRepo: string, request?: Request) {
+  await requireAdminItem(actor, itemId);
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  try {
+    await db.insert(itemGithubLink).values({
+      id,
+      itemId,
+      githubRepo,
+      createdBy: actor.id,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) return { id: null, githubRepo, itemId };
+    throw error;
+  }
+  await audit({
+    actorId: actor.id,
+    action: "github.link",
+    resourceType: "item",
+    resourceId: itemId,
+    metadata: { name: githubRepo },
+    request,
+  });
+  return { id, githubRepo, itemId };
 }

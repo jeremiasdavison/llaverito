@@ -42,6 +42,16 @@ async function createAuth() {
       autoSignIn: true,
       requireEmailVerification: false,
     },
+    socialProviders:
+      process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+        ? {
+            github: {
+              clientId: process.env.GITHUB_CLIENT_ID,
+              clientSecret: process.env.GITHUB_CLIENT_SECRET,
+              scope: ["read:user", "user:email", "repo"],
+            },
+          }
+        : undefined,
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,

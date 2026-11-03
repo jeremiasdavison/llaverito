@@ -140,10 +140,54 @@ export const share = pgTable(
       .notNull()
       .references(() => user.id),
     createdAt: ts("created_at").notNull().defaultNow(),
+    status: text("status").$type<"pending" | "approved" | "denied">().notNull().default("pending"),
   },
   (table) => [
     uniqueIndex("share_target").on(table.resourceType, table.resourceId, table.granteeEmail),
   ],
+);
+
+export const shareItemKey = pgTable(
+  "share_item_key",
+  {
+    shareId: text("share_id")
+      .notNull()
+      .references(() => share.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => item.id, { onDelete: "cascade" }),
+    seal: jsonb("seal").$type<Record<string, string>>().notNull(),
+  },
+  (table) => [uniqueIndex("share_item_key_pk").on(table.shareId, table.itemId)],
+);
+
+export const vaultProfile = pgTable("vault_profile", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  kdfSalt: text("kdf_salt").notNull(),
+  kdfIterations: integer("kdf_iterations").notNull(),
+  publicKey: text("public_key").notNull(),
+  wrappedPrivateKey: text("wrapped_private_key").notNull(),
+  privateKeyIv: text("private_key_iv").notNull(),
+  privateKeyTag: text("private_key_tag").notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const itemGithubLink = pgTable(
+  "item_github_link",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => item.id, { onDelete: "cascade" }),
+    githubRepo: text("github_repo").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("item_github_repo").on(table.itemId, table.githubRepo)],
 );
 
 export const agentToken = pgTable("agent_token", {
@@ -184,6 +228,8 @@ export const accessRequest = pgTable("access_request", {
   decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
   decidedAt: ts("decided_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
+  sealedPayload: jsonb("sealed_payload").$type<Record<string, string>>(),
+  grantToken: text("grant_token"),
 });
 
 export const accessRequestItem = pgTable(
@@ -251,6 +297,9 @@ export const schema = {
   folder,
   item,
   share,
+  shareItemKey,
+  vaultProfile,
+  itemGithubLink,
   agentToken,
   accessRequest,
   accessRequestItem,

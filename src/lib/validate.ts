@@ -34,28 +34,45 @@ export const folderPatchSchema = z.object({
     .or(z.literal("")),
 });
 
+const b64 = z.string().min(8).max(200_000).regex(/^[A-Za-z0-9+/=_-]+$/);
+
+export const envelopeSchema = z
+  .object({
+    wrappedDek: b64,
+    dekIv: b64,
+    dekTag: b64,
+    ciphertext: b64,
+    iv: b64,
+    tag: b64,
+  })
+  .strict();
+
+export const sealedSchema = z
+  .object({
+    alg: z.literal("X25519-HKDF-SHA256-AES-256-GCM"),
+    ephemeralPublicKey: z.string().min(40).max(80),
+    iv: z.string().min(8).max(64),
+    ciphertext: z.string().min(8).max(500_000),
+    tag: z.string().min(8).max(64),
+  })
+  .strict();
+
 export const itemSchema = z
   .object({
     folderId: z.uuid("Elegí una carpeta"),
     name: z.string().trim().min(1, "El nombre es obligatorio").max(120),
     kind: z.enum(["api_key", "ssh_key"]),
-    secret: z.string().min(8, "El secreto es demasiado corto").max(64_000),
-    publicKey: z.string().trim().max(8_000).optional().or(z.literal("")),
+    fingerprint: z.string().max(80).nullable().optional(),
+    envelope: envelopeSchema,
   })
-  .superRefine((value, ctx) => {
-    if (value.kind === "ssh_key" && !value.secret.includes("PRIVATE KEY")) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["secret"],
-        message: "La clave SSH tiene que incluir el bloque PRIVATE KEY",
-      });
-    }
-  });
+  .strict();
 
-export const rotateSchema = z.object({
-  secret: z.string().min(8).max(64_000),
-  publicKey: z.string().trim().max(8_000).optional().or(z.literal("")),
-});
+export const rotateSchema = z
+  .object({
+    fingerprint: z.string().max(80).nullable().optional(),
+    envelope: envelopeSchema,
+  })
+  .strict();
 
 export const unlockSchema = z.object({
   confirm: z.literal(true, { error: "Confirmá que querés ver el secreto" }),
@@ -90,9 +107,46 @@ export const envRequestSchema = z.object({
     .or(z.literal("")),
 });
 
-export const decisionSchema = z.object({
-  action: z.enum(["approve", "deny"]),
-});
+export const decisionSchema = z
+  .object({
+    action: z.enum(["approve", "deny"]),
+    sealed: sealedSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.action === "approve" && !value.sealed) {
+      ctx.addIssue({ code: "custom", path: ["sealed"], message: "La aprobación tiene que incluir el sobre cifrado en el navegador" });
+    }
+  });
+
+export const profileSchema = z
+  .object({
+    kdfSalt: z.string().min(8).max(80),
+    kdfIterations: z.literal(600_000),
+    publicKey: z.string().min(40).max(80),
+    wrappedPrivateKey: b64,
+    privateKeyIv: b64,
+    privateKeyTag: b64,
+  })
+  .strict();
+
+export const shareKeysSchema = z
+  .object({
+    wraps: z
+      .array(
+        z.object({
+          itemId: z.uuid(),
+          seal: sealedSchema,
+        }),
+      )
+      .min(1)
+      .max(50),
+  })
+  .strict();
+
+export const githubLinkSchema = z.object({
+  githubRepo: z.string().trim().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Usá owner/repo"),
+}).strict();
 
 export const agentTokenSchema = z.object({
   name: z.string().trim().min(1).max(80),

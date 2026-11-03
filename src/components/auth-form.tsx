@@ -82,6 +82,22 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
         <button className="btn" type="submit" disabled={pending}>
           {pending ? "Un momento…" : mode === "sign-up" ? "Crear cuenta" : "Entrar"}
         </button>
+        <button
+          className="btn-ghost"
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setPending(true);
+            void authClient.signIn.social({ provider: "github", callbackURL: next }).then((result) => {
+              if (result.error) {
+                setPending(false);
+                setError(result.error.message ?? "GitHub no está configurado en el servidor");
+              }
+            });
+          }}
+        >
+          Entrar con GitHub
+        </button>
         <p className="note">
           {mode === "sign-up" ? (
             <Link href="/sign-in">Ya tengo cuenta</Link>

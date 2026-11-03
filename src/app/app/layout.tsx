@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { VaultGate } from "@/components/vault-gate";
 import { ConfigError } from "@/components/config-error";
 import { ensurePersonalFolder } from "@/lib/bootstrap";
 import { ConfigError as ConfigFailure } from "@/lib/errors";
@@ -24,7 +25,7 @@ export default async function VaultLayout({ children }: { children: React.ReactN
   }
   return (
     <AppShell name={user.name} email={user.email}>
-      {children}
+      <VaultGate>{children}</VaultGate>
     </AppShell>
   );
 }

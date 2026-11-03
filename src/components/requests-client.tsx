@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useVault } from "@/components/vault-gate";
 import { api } from "@/lib/client-api";
+import { type Envelope } from "@/lib/vault-crypto";
 
 type VaultItem = { id: string; name: string; revokedAt: string | null; folderId: string };
 type Folder = { id: string; name: string; kind: "personal" | "project" };
@@ -12,11 +14,13 @@ type RequestRow = {
   status: string;
   canDecide: boolean;
   canCancel: boolean;
+  wrapPublicKey: string | null;
   confirmation: string | null;
   items: { id: string; name: string; kind: string }[];
 };
 
 export function RequestsClient() {
+  const vault = useVault();
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [items, setItems] = useState<VaultItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -70,10 +74,20 @@ export function RequestsClient() {
     await load();
   }
 
-  async function decide(id: string, action: "approve" | "deny") {
-    const result = await api<{ confirmation: string }>(`/api/requests/${id}`, {
+  async function decide(row: RequestRow, action: "approve" | "deny") {
+    let sealed = undefined;
+    if (action === "approve") {
+      if (!row.wrapPublicKey) throw new Error("La solicitud no tiene clave pública del agente");
+      const entries = [];
+      for (const item of row.items) {
+        const material = await api<Envelope>(`/api/items/${item.id}/envelope`);
+        entries.push({ itemId: item.id, name: item.name, kind: item.kind, secret: await vault.decryptOwned(material) });
+      }
+      sealed = await vault.sealFor({ entries }, row.wrapPublicKey);
+    }
+    const result = await api<{ confirmation: string }>(`/api/requests/${row.id}`, {
       method: "POST",
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, sealed }),
     });
     setNotice(result.confirmation);
     await load();
@@ -103,12 +117,12 @@ export function RequestsClient() {
               <div className="toolbar">
                 {row.canDecide ? (
                   <>
-                    <button className="btn" type="button" onClick={() => void decide(row.id, "approve").catch((cause: Error) => setError(cause.message))}>Aprobar</button>
-                    <button className="btn-danger" type="button" onClick={() => void decide(row.id, "deny").catch((cause: Error) => setError(cause.message))}>Rechazar</button>
+                    <button className="btn" type="button" onClick={() => void decide(row, "approve").catch((cause: Error) => setError(cause.message))}>Aprobar</button>
+                    <button className="btn-danger" type="button" onClick={() => void decide(row, "deny").catch((cause: Error) => setError(cause.message))}>Rechazar</button>
                   </>
                 ) : null}
                 {row.canCancel ? (
-                  <button className="btn-ghost" type="button" onClick={() => void decide(row.id, "deny").catch((cause: Error) => setError(cause.message))}>Cancelar</button>
+                  <button className="btn-ghost" type="button" onClick={() => void decide(row, "deny").catch((cause: Error) => setError(cause.message))}>Cancelar</button>
                 ) : null}
               </div>
             </article>

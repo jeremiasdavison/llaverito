@@ -2,17 +2,10 @@ import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { folderAccess, itemAccess } from "./access";
 import { audit } from "./audit";
-import {
-  decryptString,
-  encryptString,
-  hashToken,
-  parseWrapPublicKey,
-  randomPrefixed,
-  sealJson,
-  type Envelope,
-} from "./crypto";
-import { getDb, getSql } from "./db";
+import { hashToken, parseWrapPublicKey, randomPrefixed } from "./crypto";
+import { getDb, query } from "./db";
 import { HttpError } from "./errors";
+import { assertCiphertextOnly } from "./http";
 import { canAdminister, canUse } from "./permissions";
 import { consumeRateLimit } from "./rate-limit";
 import { accessRequest, accessRequestItem, envBinding, item } from "./schema";
@@ -209,6 +202,7 @@ export async function listRequests(actor: Actor) {
       grantId: null,
       canDecide: decide,
       canCancel: own && row.status === "pending",
+      wrapPublicKey: row.wrapPublicKey,
       items,
       confirmation:
         row.status === "approved"
@@ -224,6 +218,7 @@ export async function decideRequest(
   actor: Actor,
   requestId: string,
   action: "approve" | "deny",
+  sealed: Record<string, string> | undefined,
   request?: Request,
 ) {
   const db = await getDb();
@@ -269,19 +264,16 @@ export async function decideRequest(
     });
     return { id: requestId, status: "denied" as const, grantId: null, confirmation: "Solicitud rechazada." };
   }
+  if (!sealed) throw new HttpError(400, "La aprobación tiene que incluir el sobre cifrado en el navegador");
+  assertCiphertextOnly(sealed);
   const grantId = randomPrefixed("llg");
-  const sealed = encryptString(grantId);
   const updated = await db
     .update(accessRequest)
     .set({
       status: "approved",
       grantHash: hashToken(grantId),
-      grantWrappedDek: sealed.wrappedDek,
-      grantDekIv: sealed.dekIv,
-      grantDekTag: sealed.dekTag,
-      grantCiphertext: sealed.ciphertext,
-      grantIv: sealed.iv,
-      grantTag: sealed.tag,
+      grantToken: grantId,
+      sealedPayload: sealed,
       grantExpiresAt: new Date(Date.now() + GRANT_MS),
       decidedBy: actor.id,
       decidedAt: new Date(),
@@ -319,21 +311,7 @@ export async function agentRequestStatus(actor: Actor, requestId: string) {
     await db.update(accessRequest).set({ status }).where(eq(accessRequest.id, requestId));
   }
   const names = await namesFor([requestId]);
-  let grantId: string | null = null;
-  if (status === "approved" && row.grantWrappedDek && row.grantDekIv && row.grantDekTag && row.grantCiphertext && row.grantIv && row.grantTag) {
-    try {
-      grantId = decryptString({
-        wrappedDek: row.grantWrappedDek,
-        dekIv: row.grantDekIv,
-        dekTag: row.grantDekTag,
-        ciphertext: row.grantCiphertext,
-        iv: row.grantIv,
-        tag: row.grantTag,
-      });
-    } catch {
-      grantId = null;
-    }
-  }
+  const grantId = status === "approved" ? row.grantToken : null;
   return {
     id: row.id,
     status,
@@ -367,87 +345,40 @@ export async function redeemGrant(actor: Actor, grantId: string, request?: Reque
   if (preview.status !== "approved" || !preview.grantExpiresAt || new Date(preview.grantExpiresAt).getTime() < Date.now()) {
     throw new HttpError(410, "El grant venció o ya se usó");
   }
-  const sql = await getSql();
-  const consumed = (await sql`
-    update access_request
-    set status = 'consumed', consumed_at = now()
-    where grant_hash = ${hash}
-      and requester_user_id = ${actor.id}
-      and status = 'approved'
-      and consumed_at is null
-      and grant_expires_at > now()
-    returning id
-  `) as unknown as { id?: string }[];
+  const consumed = await query<{ id?: string }>(
+    `update access_request
+     set status = 'consumed', consumed_at = now()
+     where grant_hash = $1
+       and requester_user_id = $2
+       and status = 'approved'
+       and consumed_at is null
+       and grant_expires_at > now()
+     returning id`,
+    [hash, actor.id],
+  );
   const consumedId = consumed[0]?.id;
   if (!consumedId) throw new HttpError(410, "El grant venció o ya se usó");
-  const secrets = await db
-    .select({
-      id: item.id,
-      name: item.name,
-      kind: item.kind,
-      folderId: item.folderId,
-      revokedAt: item.revokedAt,
-      wrappedDek: item.wrappedDek,
-      dekIv: item.dekIv,
-      dekTag: item.dekTag,
-      ciphertext: item.ciphertext,
-      iv: item.iv,
-      tag: item.tag,
-    })
+  const [stored] = await db
+    .select({ sealedPayload: accessRequest.sealedPayload, kind: accessRequest.kind })
+    .from(accessRequest)
+    .where(eq(accessRequest.id, consumedId))
+    .limit(1);
+  if (!stored?.sealedPayload) throw new HttpError(409, "No hay un sobre para este grant");
+  const linked = await db
+    .select({ revokedAt: item.revokedAt })
     .from(accessRequestItem)
     .innerJoin(item, eq(item.id, accessRequestItem.itemId))
     .where(eq(accessRequestItem.requestId, consumedId));
-  if (secrets.some((row) => row.revokedAt || row.ciphertext === "revoked")) {
-    await audit({
-      actorId: actor.id,
-      action: "grant.blocked",
-      resourceType: "request",
-      resourceId: consumedId,
-      metadata: { status: "consumed", itemCount: secrets.length },
-      request,
-    });
+  if (linked.some((row) => row.revokedAt)) {
     throw new HttpError(409, "Un elemento fue revocado. El grant se consumió sin revelar nada.");
   }
-  const bindings = preview.folderId
-    ? await db
-        .select({ itemId: envBinding.itemId, envKey: envBinding.envKey })
-        .from(envBinding)
-        .where(eq(envBinding.folderId, preview.folderId))
-    : [];
-  const entries = secrets.flatMap((row) => {
-    let plaintext = "";
-    try {
-      plaintext = decryptString(row as Envelope);
-    } catch {
-      throw new HttpError(500, "No se pudo abrir el secreto");
-    }
-    const keys = bindings.filter((binding) => binding.itemId === row.id).map((binding) => binding.envKey);
-    const targets = keys.length ? keys : [null];
-    return targets.map((envKey) => ({
-      itemId: row.id,
-      name: row.name,
-      kind: row.kind,
-      envKey,
-      secret: plaintext,
-    }));
-  });
-  let recipient: Buffer;
-  try {
-    recipient = parseWrapPublicKey(preview.wrapPublicKey);
-  } catch {
-    throw new HttpError(400, "La clave de cierre es inválida");
-  }
-  const sealed = sealJson({ entries }, recipient);
   await audit({
     actorId: actor.id,
     action: "grant.redeem",
     resourceType: "request",
     resourceId: consumedId,
-    metadata: { itemCount: secrets.length, kind: preview.kind },
+    metadata: { itemCount: linked.length, kind: stored.kind },
     request,
   });
-  return {
-    sealed,
-    entries: entries.map(({ secret: _secret, ...rest }) => rest),
-  };
+  return { sealed: stored.sealedPayload };
 }

@@ -111,7 +111,9 @@ export function sealJson(value: unknown, recipientPublicRaw: Buffer): SealedPayl
     type: "spki",
   });
   const shared = crypto.diffieHellman({ privateKey, publicKey: recipient });
-  const aesKey = Buffer.from(crypto.hkdfSync("sha256", shared, Buffer.alloc(0), SEAL_INFO, 32));
+  const aesKey = Buffer.from(
+    crypto.hkdfSync("sha256", shared, Buffer.from("llaverito-seal-salt-v1"), SEAL_INFO, 32),
+  );
   const sealed = aesEncrypt(aesKey, Buffer.from(JSON.stringify(value), "utf8"));
   const ephemeral = Buffer.from(publicKey.export({ format: "der", type: "spki" })).subarray(-32);
   aesKey.fill(0);
@@ -139,7 +141,9 @@ export function openSeal(sealed: SealedPayload, recipientPrivateRaw: Buffer): un
     type: "spki",
   });
   const shared = crypto.diffieHellman({ privateKey, publicKey: ephemeral });
-  const aesKey = Buffer.from(crypto.hkdfSync("sha256", shared, Buffer.alloc(0), SEAL_INFO, 32));
+  const aesKey = Buffer.from(
+    crypto.hkdfSync("sha256", shared, Buffer.from("llaverito-seal-salt-v1"), SEAL_INFO, 32),
+  );
   try {
     const plaintext = aesDecrypt(
       aesKey,

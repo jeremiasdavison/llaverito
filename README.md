@@ -1,6 +1,6 @@
 # Llaverito
 
-Cofre para que un agente use API keys y claves SSH sin ver el secreto. La persona guarda el material, el agente pide usarlo, y la aprobación devuelve un grant corto. El texto plano solo sale por un revelado explícito en la bóveda o por un sobre de un solo uso que abre el runner.
+Cofre para que un agente use API keys y claves SSH sin ver el secreto. El cifrado es en el navegador, al estilo 1Password: cada secreto tiene una data key, y esa data key se envuelve con una clave derivada de la contraseña de la bóveda más una Secret Key que no se guarda en Supabase. Compartir vuelve a envolver la data key para la clave pública de la otra persona, después de una aprobación. El agente solo recibe un sobre.
 
 ## Primer uso
 
@@ -16,10 +16,15 @@ Copiá `.env.example` a `.env.local`. Generá cada secreto con `openssl rand -ba
 
 | Variable | Dónde | Notas |
 | --- | --- | --- |
-| `DATABASE_URL` | Vercel, tipo Secret | Postgres de Neon, string con pooler. También se acepta `POSTGRES_URL`. |
-| `BETTER_AUTH_SECRET` | Vercel, tipo Secret | 32 caracteres o más. Distinto en Production y Preview si el equipo lo exige. |
-| `BETTER_AUTH_URL` | Solo Production | La URL canónica, por ejemplo `https://llaverito.vercel.app`. En Preview dejala sin definir. |
-| `ENCRYPTION_KEY` | Vercel, tipo Secret | Base64 de 32 bytes. Cifra el material. Cambiarla deja los secretos viejos ilegibles. |
+| `DATABASE_URL` | Vercel, tipo Secret | Postgres de Supabase, string con pooler. También se acepta `POSTGRES_URL`. |
+| `BETTER_AUTH_SECRET` | Vercel, tipo Secret | 32 caracteres o más. |
+| `BETTER_AUTH_URL` | Solo Production | `https://llaverito-alpha.vercel.app`. En Preview dejala sin definir. |
+| `GITHUB_CLIENT_ID` | Vercel, tipo Config | OAuth app de GitHub. |
+| `GITHUB_CLIENT_SECRET` | Vercel, tipo Secret | Secreto de esa OAuth app. |
+
+GitHub OAuth, lo crea Jeremías: Settings → Developer settings → OAuth Apps → New. Homepage `https://llaverito-alpha.vercel.app`. Callback `https://llaverito-alpha.vercel.app/api/auth/callback/github`.
+
+Supabase, si no quedó provisionado: dashboard de Supabase → New project → Project Settings → Database → connection string (pooler, transaction) → `vercel env add DATABASE_URL`.
 
 En local: `npm install`, `npm run db:migrate`, `npm run dev`.
 

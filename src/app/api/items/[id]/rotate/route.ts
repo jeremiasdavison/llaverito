@@ -14,5 +14,5 @@ export const POST = (request: Request, context: Context) =>
     const actor = await requireUser();
     const { id } = await context.params;
     const body = await readJson(request, rotateSchema);
-    return json(await rotateItem(actor, id, { ...body, publicKey: body.publicKey || undefined }, request));
+    return json(await rotateItem(actor, id, body, request));
   });
