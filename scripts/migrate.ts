@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
+import { poolConfig } from "../src/lib/db.ts";
 import { statements } from "../src/lib/statements.ts";
 
 function loadLocalEnv() {
@@ -32,10 +33,7 @@ if (!url) {
   process.exit(1);
 }
 
-const pool = new Pool({
-  connectionString: url,
-  ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
-});
+const pool = new Pool(poolConfig(url));
 for (const statement of statements) {
   await pool.query(statement);
 }

@@ -16,14 +16,21 @@ export function databaseUrl(): string {
   return url;
 }
 
+export function poolConfig(connectionString: string) {
+  const parsed = new URL(connectionString);
+  const local = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  parsed.searchParams.delete("sslmode");
+  parsed.searchParams.delete("ssl");
+  return {
+    connectionString: parsed.toString(),
+    max: 1,
+    ssl: local ? undefined : { rejectUnauthorized: false },
+  };
+}
+
 function connect(): Client {
   if (client) return client;
-  const connectionString = databaseUrl();
-  const pool = new Pool({
-    connectionString,
-    max: 1,
-    ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
-  });
+  const pool = new Pool(poolConfig(databaseUrl()));
   const created = { pool, db: drizzle(pool, { schema }) };
   client = created;
   return created;
