@@ -6,7 +6,7 @@ const sans = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 const display = Newsreader({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: "Llaverito",
+  title: "vaultAgent",
   description: "Cofre de credenciales para agentes. El modelo no ve el secreto.",
   robots: { index: false, follow: false },
 };

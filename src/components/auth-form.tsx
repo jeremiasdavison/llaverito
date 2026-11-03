@@ -51,13 +51,11 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
 
   return (
     <main className="auth-wrap">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <Link className="mark" href="/">
-          <i aria-hidden="true" />
-          Llaverito
-        </Link>
-        <h1>{mode === "sign-up" ? "Crear cuenta" : "Entrar"}</h1>
-        <p className="note">No hay una cuenta de demostración. La primera vez te registrás y cargás tus propias llaves.</p>
+      <form className="glass glass-card" onSubmit={onSubmit}>
+        <h1>{mode === "sign-up" ? "Crear cuenta" : "Hola de nuevo"}</h1>
+        <p className="lede note">
+          {mode === "sign-up" ? "vaultAgent guarda las llaves cifradas en este navegador." : "Entrá para seguir con la bóveda."}
+        </p>
         {error ? <p className="alert" role="alert">{error}</p> : null}
         {mode === "sign-up" ? (
           <label>
@@ -79,11 +77,12 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
             <input name="confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
           </label>
         ) : null}
-        <button className="btn" type="submit" disabled={pending}>
+        <button className="btn-ink" type="submit" disabled={pending}>
           {pending ? "Un momento…" : mode === "sign-up" ? "Crear cuenta" : "Entrar"}
         </button>
+        <div className="or-line">o seguí con</div>
         <button
-          className="btn-ghost"
+          className="btn-social"
           type="button"
           disabled={pending}
           onClick={() => {

@@ -5,7 +5,7 @@ export default function HomePage() {
     <main className="landing">
       <div className="mark">
         <i aria-hidden="true" />
-        Llaverito
+        vaultAgent
       </div>
       <section className="hero">
         <h1>Las llaves las usa el agente. El secreto se queda en el cofre.</h1>

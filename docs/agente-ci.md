@@ -1,6 +1,6 @@
 # Cómo un agente o CI pide el entorno
 
-Llaverito no entrega el secreto en la respuesta de aprobación. El runner, fuera del modelo, genera una clave X25519, pide el uso, espera la aprobación humana y abre un sobre de un solo uso.
+vaultAgent no entrega el secreto en la respuesta de aprobación. El runner, fuera del modelo, genera una clave X25519, pide el uso, espera la aprobación humana y abre un sobre de un solo uso.
 
 ## Identidad
 
@@ -69,4 +69,4 @@ Para elementos sueltos, sin carpeta, el pedido es `POST /api/agent/requests` con
 
 ## Qué no hace esta versión
 
-No inyecta solo dentro de un sandbox de GitHub. No federa OIDC. No rota `ENCRYPTION_KEY`. El paso de aprobación sigue siendo una persona en la web de Llaverito.
+No inyecta solo dentro de un sandbox de GitHub. No federa OIDC. No rota `ENCRYPTION_KEY`. El paso de aprobación sigue siendo una persona en la web de vaultAgent.

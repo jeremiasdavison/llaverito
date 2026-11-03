@@ -35,7 +35,7 @@ export function AppShell({
       <aside className="rail">
         <Link className="mark" href="/app">
           <i aria-hidden="true" />
-          Llaverito
+          vaultAgent
         </Link>
         <nav aria-label="Secciones">
           {links.map((link) => (

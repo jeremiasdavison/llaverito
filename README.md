@@ -1,4 +1,4 @@
-# Llaverito
+# vaultAgent
 
 Cofre para que un agente use API keys y claves SSH sin ver el secreto. El cifrado es en el navegador, al estilo 1Password: cada secreto tiene una data key, y esa data key se envuelve con una clave derivada de la contraseña de la bóveda más una Secret Key que no se guarda en Supabase. Compartir vuelve a envolver la data key para la clave pública de la otra persona, después de una aprobación. El agente solo recibe un sobre.
 
