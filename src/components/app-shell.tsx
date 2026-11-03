@@ -34,7 +34,6 @@ export function AppShell({
     <div className="shell">
       <aside className="rail">
         <Link className="mark" href="/app">
-          <i aria-hidden="true" />
           vaultAgent
         </Link>
         <nav aria-label="Secciones">

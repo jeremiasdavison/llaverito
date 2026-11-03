@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { Figtree, Newsreader } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 
-const sans = Figtree({ subsets: ["latin"], variable: "--font-sans" });
-const display = Newsreader({ subsets: ["latin"], variable: "--font-display" });
+const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "vaultAgent",
@@ -14,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={`${sans.variable} ${display.variable}`}>{children}</body>
+      <body className={sans.variable}>{children}</body>
     </html>
   );
 }

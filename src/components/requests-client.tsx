@@ -105,7 +105,7 @@ export function RequestsClient() {
         <div className="stack">
           {rows.length === 0 ? <p className="note">No hay solicitudes.</p> : null}
           {rows.map((row) => (
-            <article key={row.id} className="panel" style={{ padding: 16 }}>
+            <article key={row.id} className="panel">
               <div className="tag">{row.status} · {row.kind}</div>
               <p>{row.purpose}</p>
               <ul>
@@ -129,7 +129,7 @@ export function RequestsClient() {
           ))}
         </div>
         <div className="stack">
-          <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void createItemRequest(event).catch((cause: Error) => setError(cause.message))}>
+          <form className="panel" onSubmit={(event) => void createItemRequest(event).catch((cause: Error) => setError(cause.message))}>
             <h2>Pedir elementos</h2>
             <label>
               Para qué
@@ -150,7 +150,7 @@ export function RequestsClient() {
             </fieldset>
             <button className="btn" type="submit">Crear solicitud</button>
           </form>
-          <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void createEnvRequest(event).catch((cause: Error) => setError(cause.message))}>
+          <form className="panel" onSubmit={(event) => void createEnvRequest(event).catch((cause: Error) => setError(cause.message))}>
             <h2>Pedir el .env del proyecto</h2>
             <label>
               Proyecto

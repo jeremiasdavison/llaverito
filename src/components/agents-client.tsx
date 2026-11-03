@@ -50,7 +50,7 @@ export function AgentsClient() {
       </p>
       {error ? <p className="alert" role="alert">{error}</p> : null}
       {fresh ? (
-        <p className="panel" style={{ padding: 16 }}>
+        <p className="panel">
           <strong>Copialo ahora. No se vuelve a mostrar.</strong>
           <textarea className="mono" readOnly value={fresh} />
           <button className="btn-ghost" type="button" onClick={() => setFresh(null)}>Ocultar</button>

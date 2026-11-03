@@ -195,7 +195,6 @@ export function VaultClient() {
                 setError(null);
               }}
             >
-              <span aria-hidden="true" />
               <div>
                 {entry.name}
                 <small>{entry.kind === "project" ? "Proyecto" : "Personal"}</small>

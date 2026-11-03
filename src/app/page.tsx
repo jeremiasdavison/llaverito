@@ -3,10 +3,9 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <main className="landing">
-      <div className="mark">
-        <i aria-hidden="true" />
+      <Link className="mark" href="/">
         vaultAgent
-      </div>
+      </Link>
       <section className="hero">
         <h1>Las llaves las usa el agente. El secreto se queda en el cofre.</h1>
         <p className="lede">
@@ -23,20 +22,17 @@ export default function HomePage() {
         </div>
       </section>
       <section className="steps" aria-label="Cómo funciona">
-        <article className="step">
-          <span>01</span>
+        <article className="step glass">
           <h2>Guardás</h2>
-          <p>El material queda cifrado en el servidor. La lista solo muestra nombre y una pista.</p>
+          <p>La llave se cifra en este navegador. La lista muestra el nombre y una pista.</p>
         </article>
-        <article className="step">
-          <span>02</span>
+        <article className="step glass">
           <h2>Pide</h2>
-          <p>El agente abre una solicitud con una clave pública efímera. Vos ves el motivo.</p>
+          <p>El agente abre una solicitud. Vos ves para qué la quiere.</p>
         </article>
-        <article className="step">
-          <span>03</span>
+        <article className="step glass">
           <h2>Aprobás</h2>
-          <p>La respuesta es un grant corto. El runner lo abre fuera del modelo y lo inyecta.</p>
+          <p>Vuelve un sobre de un solo uso. El secreto no entra en la respuesta.</p>
         </article>
       </section>
     </main>

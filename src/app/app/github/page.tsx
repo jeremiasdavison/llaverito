@@ -54,7 +54,7 @@ export default function GithubPage() {
       ) : (
         <p className="note">{repos.length} repositorios visibles con tu cuenta.</p>
       )}
-      <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void link(event).catch((cause: Error) => setError(cause.message))}>
+      <form className="panel" onSubmit={(event) => void link(event).catch((cause: Error) => setError(cause.message))}>
         <h2>Vincular repo y secreto</h2>
         <label>
           Secreto

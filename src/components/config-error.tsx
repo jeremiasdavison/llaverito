@@ -1,7 +1,7 @@
 export function ConfigError() {
   return (
     <main className="auth-wrap">
-      <section className="auth-card">
+      <section className="glass glass-card">
         <h1>Falta configurar el cofre</h1>
         <p>
           vaultAgent necesita una base Postgres y las claves de servidor. En Vercel hay que definir
