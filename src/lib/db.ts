@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { poolConfig } from "./db-url";
 import { ConfigError } from "./errors";
 import { schema } from "./schema";
 import { statements } from "./statements";
@@ -14,18 +15,6 @@ export function databaseUrl(): string {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) throw new ConfigError();
   return url;
-}
-
-export function poolConfig(connectionString: string) {
-  const parsed = new URL(connectionString);
-  const local = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-  parsed.searchParams.delete("sslmode");
-  parsed.searchParams.delete("ssl");
-  return {
-    connectionString: parsed.toString(),
-    max: 1,
-    ssl: local ? undefined : { rejectUnauthorized: false },
-  };
 }
 
 function connect(): Client {

@@ -243,11 +243,13 @@ export async function createItem(
     kind: ItemKind;
     fingerprint?: string | null;
     envelope: Envelope;
+    githubRepo?: string;
   },
   request?: Request,
 ) {
   assertCiphertextOnly(input);
   await requireAdminFolder(actor, input.folderId);
+  const githubRepo = input.githubRepo?.trim() || null;
   const id = crypto.randomUUID();
   const db = await getDb();
   try {
@@ -263,6 +265,15 @@ export async function createItem(
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    if (githubRepo) {
+      await db.insert(itemGithubLink).values({
+        id: crypto.randomUUID(),
+        itemId: id,
+        githubRepo,
+        createdBy: actor.id,
+        createdAt: new Date(),
+      });
+    }
   } catch (error) {
     if (isUniqueViolation(error)) throw new HttpError(409, "Ya hay un elemento activo con ese nombre");
     throw error;
@@ -272,10 +283,10 @@ export async function createItem(
     action: "item.create",
     resourceType: "item",
     resourceId: id,
-    metadata: { name: input.name, kind: input.kind, folderId: input.folderId },
+    metadata: { name: input.name, kind: input.kind, folderId: input.folderId, githubRepo },
     request,
   });
-  return { id, name: input.name, kind: input.kind, folderId: input.folderId };
+  return { id, name: input.name, kind: input.kind, folderId: input.folderId, githubRepo };
 }
 
 export async function revokeItem(actor: Actor, itemId: string, request?: Request) {
@@ -621,7 +632,11 @@ export async function listGithubLinks(itemIds: string[]) {
 }
 
 export async function linkGithubRepo(actor: Actor, itemId: string, githubRepo: string, request?: Request) {
-  await requireAdminItem(actor, itemId);
+  const { item: row } = await requireAdminItem(actor, itemId);
+  if (row.revokedAt) throw new HttpError(409, "El elemento está revocado");
+  if (row.kind !== "api_key" && row.kind !== "ssh_key") {
+    throw new HttpError(400, "Solo se vincula un repositorio a una API key o una clave SSH");
+  }
   const db = await getDb();
   const id = crypto.randomUUID();
   try {

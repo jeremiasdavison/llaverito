@@ -5,7 +5,14 @@ import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/client-api";
 
 type Repo = { fullName: string; private: boolean };
-type VaultItem = { id: string; name: string; kind: string; githubRepos?: string[] };
+type VaultItem = {
+  id: string;
+  name: string;
+  kind: string;
+  revokedAt: string | null;
+  access: "owner" | "admin" | "use";
+  githubRepos?: string[];
+};
 
 export default function GithubPage() {
   const [connected, setConnected] = useState(false);
@@ -21,7 +28,7 @@ export default function GithubPage() {
     ]);
     setConnected(github.connected);
     setRepos(github.repos);
-    setItems(vault.items);
+    setItems(vault.items.filter((item) => !item.revokedAt && (item.access === "owner" || item.access === "admin")));
   }
 
   useEffect(() => {

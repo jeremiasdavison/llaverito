@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { poolConfig } from "../src/lib/db.ts";
+import { poolConfig } from "../src/lib/db-url.ts";
 import { statements } from "../src/lib/statements.ts";
 
 function loadLocalEnv() {

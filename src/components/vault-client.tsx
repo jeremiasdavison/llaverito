@@ -22,6 +22,7 @@ type VaultItem = {
   revokedAt: string | null;
   access: Access;
   sharedDirectly: boolean;
+  githubRepos?: string[];
 };
 type ShareRow = { id: string; granteeEmail: string; permission: "use" | "admin"; status?: string };
 type Manifest = {
@@ -98,6 +99,7 @@ export function VaultClient() {
     const publicKey = String(form.get("publicKey") ?? "");
     const envelope = await vault.encrypt(secret);
     const fingerprint = kind === "ssh_key" ? await sshFingerprint(publicKey) : apiKeyHint(secret);
+    const githubRepo = String(form.get("githubRepo") ?? "").trim();
     await api("/api/items", {
       method: "POST",
       body: JSON.stringify({
@@ -106,6 +108,7 @@ export function VaultClient() {
         kind,
         fingerprint,
         envelope,
+        ...(githubRepo ? { githubRepo } : {}),
       }),
     });
     event.currentTarget.reset();
@@ -225,6 +228,7 @@ export function VaultClient() {
                     <div>
                       <strong>{entry.name}</strong>
                       <div className="note">{entry.fingerprint ?? "Sin huella"}</div>
+                      {entry.githubRepos?.length ? <div className="note">{entry.githubRepos.join(", ")}</div> : null}
                     </div>
                     <div>{entry.kind === "api_key" ? "API" : "SSH"}</div>
                     <div>{entry.revokedAt ? "Revocada" : entry.access === "owner" ? "Dueño" : entry.access === "admin" ? "Admin" : "Uso"}</div>
@@ -274,6 +278,10 @@ export function VaultClient() {
                   <label>
                     Clave pública SSH, si la tenés
                     <textarea name="publicKey" spellCheck={false} placeholder="ssh-ed25519 AAAA..." />
+                  </label>
+                  <label>
+                    Repositorio, si corresponde
+                    <input name="githubRepo" placeholder="owner/repo" pattern="[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+" />
                   </label>
                   <button className="btn" type="submit">Guardar cifrada</button>
                 </form>

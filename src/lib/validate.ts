@@ -5,6 +5,12 @@ const envKey = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]{0,63}$/, "La variable debe verse como OPENAI_API_KEY");
 
+const githubRepoName = z
+  .string()
+  .trim()
+  .max(120)
+  .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Usá owner/repo");
+
 const wrapPublicKey = z
   .string()
   .min(40)
@@ -14,24 +20,12 @@ const wrapPublicKey = z
 export const folderSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(80),
   kind: z.enum(["personal", "project"]),
-  githubRepo: z
-    .string()
-    .trim()
-    .max(120)
-    .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Usá owner/repo")
-    .optional()
-    .or(z.literal("")),
+  githubRepo: githubRepoName.optional().or(z.literal("")),
 });
 
 export const folderPatchSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
-  githubRepo: z
-    .string()
-    .trim()
-    .max(120)
-    .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Usá owner/repo")
-    .optional()
-    .or(z.literal("")),
+  githubRepo: githubRepoName.optional().or(z.literal("")),
 });
 
 const b64 = z.string().min(8).max(200_000).regex(/^[A-Za-z0-9+/=_-]+$/);
@@ -64,6 +58,7 @@ export const itemSchema = z
     kind: z.enum(["api_key", "ssh_key"]),
     fingerprint: z.string().max(80).nullable().optional(),
     envelope: envelopeSchema,
+    githubRepo: githubRepoName.optional().or(z.literal("")),
   })
   .strict();
 
@@ -145,7 +140,7 @@ export const shareKeysSchema = z
   .strict();
 
 export const githubLinkSchema = z.object({
-  githubRepo: z.string().trim().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Usá owner/repo"),
+  githubRepo: githubRepoName,
 }).strict();
 
 export const agentTokenSchema = z.object({

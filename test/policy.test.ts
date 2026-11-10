@@ -27,7 +27,7 @@ test("redaction and hints do not keep the secret", () => {
   assert.equal(cleaned.name, "openai");
 });
 
-test("item schema rejects plaintext and accepts only an envelope", () => {
+test("saving a key can name the GitHub repo and rejects plaintext", () => {
   const rejected = itemSchema.safeParse({
     folderId: "550e8400-e29b-41d4-a716-446655440000",
     name: "ci",
@@ -50,4 +50,12 @@ test("item schema rejects plaintext and accepts only an envelope", () => {
     },
   });
   assert.equal(accepted.success, true);
+  const linked = itemSchema.safeParse({
+    ...accepted.data,
+    kind: "ssh_key",
+    githubRepo: "jeremiasdavison/llaverito",
+  });
+  assert.equal(linked.success, true);
+  const badRepo = itemSchema.safeParse({ ...accepted.data, githubRepo: "not a repo" });
+  assert.equal(badRepo.success, false);
 });
