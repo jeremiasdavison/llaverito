@@ -37,6 +37,16 @@ function repoHref(slug: string | null) {
   return `https://github.com/${slug}`;
 }
 
+function wipeDialog(dialog: HTMLDialogElement) {
+  const form = dialog.querySelector("form");
+  form?.reset();
+  form?.querySelectorAll("textarea, input").forEach((field) => {
+    if (field instanceof HTMLTextAreaElement && !field.readOnly) field.value = "";
+    if (field instanceof HTMLInputElement && field.type !== "checkbox" && field.type !== "radio") field.value = "";
+    if (field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")) field.checked = false;
+  });
+}
+
 export function VaultClient() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -436,7 +446,14 @@ export function VaultClient() {
         </div>
       </div>
 
-      <dialog ref={folderRef} aria-labelledby="folder-dialog-title" onClose={() => setPending(false)}>
+      <dialog
+        ref={folderRef}
+        aria-labelledby="folder-dialog-title"
+        onClose={(event) => {
+          wipeDialog(event.currentTarget);
+          setPending(false);
+        }}
+      >
         <form onSubmit={(event) => void onCreateFolder(event)}>
           <h2 id="folder-dialog-title">Carpeta de proyecto</h2>
           <p className="note">El repo es una etiqueta. Todavía no consulta la membresía en GitHub.</p>
@@ -455,7 +472,14 @@ export function VaultClient() {
         </form>
       </dialog>
 
-      <dialog ref={createRef} aria-labelledby="item-dialog-title">
+      <dialog
+        ref={createRef}
+        aria-labelledby="item-dialog-title"
+        onClose={(event) => {
+          wipeDialog(event.currentTarget);
+          setPending(false);
+        }}
+      >
         <form onSubmit={(event) => void onCreateItem(event)}>
           <h2 id="item-dialog-title">Nuevo secreto</h2>
           <p className="note">Se envía una vez para cifrarlo. Después la lista solo guarda nombre y pista.</p>
@@ -488,7 +512,8 @@ export function VaultClient() {
       <dialog
         ref={revealRef}
         aria-labelledby="reveal-dialog-title"
-        onClose={() => {
+        onClose={(event) => {
+          wipeDialog(event.currentTarget);
           setSecret(null);
           setCopied(false);
         }}
