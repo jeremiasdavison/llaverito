@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Mark } from "@/components/mark";
 import { authClient } from "@/lib/auth-client";
 import { isStrongPassword } from "@/lib/passwords";
 
@@ -10,6 +11,7 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const creating = mode === "sign-up";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,7 +20,7 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
     setPending(true);
-    if (mode === "sign-up") {
+    if (creating) {
       const name = String(form.get("name") ?? "").trim();
       const confirm = String(form.get("confirm") ?? "");
       if (!isStrongPassword(password)) {
@@ -50,16 +52,25 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
   }
 
   return (
-    <main className="auth-wrap">
+    <main className="auth-split">
+      <section className="auth-story">
+        <div>
+          <Mark />
+          <h1>{creating ? "Un cofre por persona. Ningún .env de muestra." : "Entrá al cofre."}</h1>
+          <p className="lede">
+            La contraseña abre tu sesión. No es una clave de proyecto y no se pega en el chat del agente.
+          </p>
+        </div>
+        <p className="note">
+          En el deploy de producción, entrar con GitHub sigue apagado hasta que existan
+          {" "}LLAVERITO_GITHUB_CLIENT_ID y LLAVERITO_GITHUB_CLIENT_SECRET. Esta versión usa email.
+        </p>
+      </section>
       <form className="auth-card" onSubmit={onSubmit}>
-        <Link className="mark" href="/">
-          <i aria-hidden="true" />
-          Llaverito
-        </Link>
-        <h1>{mode === "sign-up" ? "Crear cuenta" : "Entrar"}</h1>
-        <p className="note">No hay una cuenta de demostración. La primera vez te registrás y cargás tus propias llaves.</p>
+        <p className="eyebrow">{creating ? "Cuenta nueva" : "Sesión"}</p>
+        <h1>{creating ? "Crear cuenta" : "Entrar"}</h1>
         {error ? <p className="alert" role="alert">{error}</p> : null}
-        {mode === "sign-up" ? (
+        {creating ? (
           <label>
             Nombre
             <input name="name" autoComplete="name" required minLength={1} maxLength={80} />
@@ -71,23 +82,26 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
         </label>
         <label>
           Contraseña
-          <input name="password" type="password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} required minLength={12} maxLength={128} />
+          <input
+            name="password"
+            type="password"
+            autoComplete={creating ? "new-password" : "current-password"}
+            required
+            minLength={12}
+            maxLength={128}
+          />
         </label>
-        {mode === "sign-up" ? (
+        {creating ? (
           <label>
             Repetir contraseña
             <input name="confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
           </label>
         ) : null}
         <button className="btn" type="submit" disabled={pending}>
-          {pending ? "Un momento…" : mode === "sign-up" ? "Crear cuenta" : "Entrar"}
+          {pending ? "Un momento…" : creating ? "Crear cuenta" : "Entrar"}
         </button>
         <p className="note">
-          {mode === "sign-up" ? (
-            <Link href="/sign-in">Ya tengo cuenta</Link>
-          ) : (
-            <Link href="/sign-up">Crear una cuenta</Link>
-          )}
+          {creating ? <Link href="/sign-in">Ya tengo cuenta</Link> : <Link href="/sign-up">Crear una cuenta</Link>}
         </p>
       </form>
     </main>

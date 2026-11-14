@@ -6,8 +6,8 @@ const sans = Outfit({ subsets: ["latin"], variable: "--font-sans" });
 const display = Fraunces({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: "Llaverito",
-  description: "Cofre de credenciales para agentes. El modelo no ve el secreto.",
+  title: "vaultAgent",
+  description: "Cofre de credenciales para agentes. El modelo no ve el secreto y la lista tampoco.",
   robots: { index: false, follow: false },
 };
 
