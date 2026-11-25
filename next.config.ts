@@ -22,6 +22,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
+  // Keep builds unblocked without running `next upgrade` in this agent.
+  experimental: { agentUpgrade: false },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
