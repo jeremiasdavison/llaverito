@@ -79,16 +79,20 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
             <input name="confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
           </label>
         ) : null}
-        <button className="btn" type="submit" disabled={pending}>
-          {pending ? "Un momento…" : mode === "sign-up" ? "Crear cuenta" : "Entrar"}
-        </button>
-        <p className="note">
+        <div className="auth-actions">
+          <button className="btn" type="submit" disabled={pending}>
+            {pending ? "Un momento…" : mode === "sign-up" ? "Crear cuenta" : "Entrar"}
+          </button>
           {mode === "sign-up" ? (
-            <Link href="/sign-in">Ya tengo cuenta</Link>
+            <Link className="btn-ghost" href="/sign-in">
+              Ya tengo cuenta
+            </Link>
           ) : (
-            <Link href="/sign-up">Crear una cuenta</Link>
+            <Link className="btn-ghost" href="/sign-up">
+              Crear cuenta
+            </Link>
           )}
-        </p>
+        </div>
       </form>
     </main>
   );
