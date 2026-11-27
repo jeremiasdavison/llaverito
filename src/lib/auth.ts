@@ -5,7 +5,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { twoFactor } from "better-auth/plugins";
 import { ensurePersonalFolder } from "./bootstrap";
-import { trustedClientIp } from "./client-ip";
+import { authCallerKey } from "./client-ip";
 import { getDb } from "./db";
 import { ConfigError, HttpError } from "./errors";
 import { trustedOriginsFromEnv } from "./origins";
@@ -33,13 +33,13 @@ function requireSecret() {
   return secret;
 }
 
-function authRequest(ctx: { request?: Request }) {
-  return ctx.request;
+function attemptHeaders(ctx: { request?: Request; headers?: Headers }) {
+  return ctx.request?.headers ?? ctx.headers;
 }
 
-async function limitAuthAttempt(request: Request | undefined, path: string) {
-  const ip = request ? trustedClientIp(request.headers) ?? "unknown" : "unknown";
-  const burst = consumeMemoryLimit(`auth-burst:${ip}:${path}`, 5, 60);
+async function limitAuthAttempt(headers: { get(name: string): string | null } | undefined, path: string) {
+  const caller = authCallerKey(headers);
+  const burst = consumeMemoryLimit(`auth-burst:${caller}:${path}`, 5, 60);
   if (!burst.allowed) {
     throw APIError.from("TOO_MANY_REQUESTS", {
       code: "RATE_LIMITED",
@@ -47,7 +47,7 @@ async function limitAuthAttempt(request: Request | undefined, path: string) {
     });
   }
   try {
-    await consumeRateLimit(`auth:${ip}:${path}`, 20, 15 * 60);
+    await consumeRateLimit(`auth:${caller}:${path}`, 20, 15 * 60);
   } catch (error) {
     if (error instanceof HttpError) {
       throw APIError.from(error.status === 429 ? "TOO_MANY_REQUESTS" : "SERVICE_UNAVAILABLE", {
@@ -117,7 +117,7 @@ async function createAuth() {
       before: createAuthMiddleware(async (ctx) => {
         const limited =
           ctx.path === "/sign-in/email" || ctx.path === "/sign-up/email" || ctx.path.startsWith("/two-factor/");
-        if (limited) await limitAuthAttempt(authRequest(ctx), ctx.path);
+        if (limited) await limitAuthAttempt(attemptHeaders(ctx), ctx.path);
         if (ctx.path !== "/sign-up/email") return;
         const body = ctx.body as { password?: unknown; email?: unknown } | undefined;
         const password = body?.password;

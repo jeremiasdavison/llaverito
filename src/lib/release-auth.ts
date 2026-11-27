@@ -47,10 +47,10 @@ async function verifySecondFactor(request: Request, code: string) {
   const headers = request.headers;
   try {
     if (/^\d{6}$/.test(code)) {
-      await auth.api.verifyTOTP({ body: { code, trustDevice: false }, headers });
+      await auth.api.verifyTOTP({ body: { code, trustDevice: false }, headers, request });
       return true;
     }
-    await auth.api.verifyBackupCode({ body: { code, trustDevice: false }, headers });
+    await auth.api.verifyBackupCode({ body: { code, trustDevice: false }, headers, request });
     return true;
   } catch {
     return false;

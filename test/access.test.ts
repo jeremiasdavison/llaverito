@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { formatScopes, parseScopes, tokenExpiry } from "../src/lib/agent-scopes.ts";
-import { trustedClientIp } from "../src/lib/client-ip.ts";
+import { authCallerKey, trustedClientIp } from "../src/lib/client-ip.ts";
 import { sameOriginAllowed } from "../src/lib/origin-check.ts";
 import { trustedOriginsFromEnv } from "../src/lib/origins.ts";
 import { isStrongPassword, passwordIssues, passwordStrength } from "../src/lib/passwords.ts";
@@ -123,8 +123,23 @@ test("client ip prefers the platform header over a spoofed forwarded list", () =
     "x-real-ip": "203.0.113.10",
     "x-vercel-forwarded-for": "198.51.100.20, 203.0.113.8",
   });
-  assert.equal(trustedClientIp(headers), "203.0.113.8");
+  assert.equal(trustedClientIp(headers), "198.51.100.20");
   assert.equal(trustedClientIp(new Headers({ "x-real-ip": "203.0.113.10" })), "203.0.113.10");
+});
+
+test("auth rate-limit keys stay per caller when the request object is absent", () => {
+  const first = new Headers({ "x-vercel-forwarded-for": "198.51.100.4, 203.0.113.9" });
+  const second = new Headers({ "x-vercel-forwarded-for": "198.51.100.5, 203.0.113.9" });
+  assert.equal(authCallerKey(first), "198.51.100.4");
+  assert.notEqual(authCallerKey(first), authCallerKey(second));
+  const onlyCookies = [
+    new Headers({ cookie: "better-auth.session_token=alpha" }),
+    new Headers({ cookie: "better-auth.session_token=beta" }),
+  ].map((headers) => authCallerKey(headers));
+  assert.equal(onlyCookies[0]?.startsWith("session:"), true);
+  assert.notEqual(onlyCookies[0], onlyCookies[1]);
+  assert.notEqual(onlyCookies[0], "unknown");
+  assert.notEqual(onlyCookies[0], "no-ip");
 });
 
 test("next path stays inside the app", () => {
