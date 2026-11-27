@@ -149,4 +149,8 @@ export const statements = [
     count integer NOT NULL,
     expires_at timestamptz NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS schema_migration (
+    id text PRIMARY KEY,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )`,
 ];
