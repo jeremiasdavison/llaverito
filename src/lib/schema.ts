@@ -18,6 +18,7 @@ export const user = pgTable("user", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
+  twoFactorEnabled: boolean("twoFactorEnabled").notNull().default(false),
   image: text("image"),
   createdAt: ts("createdAt").notNull().defaultNow(),
   updatedAt: ts("updatedAt").notNull().defaultNow(),
@@ -154,10 +155,28 @@ export const agentToken = pgTable("agent_token", {
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   tokenPrefix: text("token_prefix").notNull(),
+  scopes: text("scopes").notNull().default("read,request,redeem"),
+  expiresAt: ts("expires_at").notNull(),
   revokedAt: ts("revoked_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
   lastUsedAt: ts("last_used_at"),
 });
+
+export const twoFactor = pgTable(
+  "twoFactor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backupCodes").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failedVerificationCount").notNull().default(0),
+    lockedUntil: ts("lockedUntil"),
+  },
+  (table) => [uniqueIndex("two_factor_user_id_idx").on(table.userId)],
+);
 
 export const accessRequest = pgTable("access_request", {
   id: text("id").primaryKey(),
@@ -237,7 +256,7 @@ export const appRateLimit = pgTable("app_rate_limit", {
   expiresAt: ts("expires_at").notNull(),
 });
 
-export const authSchema = { user, session, account, verification, rateLimit };
+export const authSchema = { user, session, account, verification, rateLimit, twoFactor };
 
 export const schema = {
   user,
@@ -252,6 +271,7 @@ export const schema = {
   item,
   share,
   agentToken,
+  twoFactor,
   accessRequest,
   accessRequestItem,
   envBinding,

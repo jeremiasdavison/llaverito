@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const POST = (request: Request) =>
   handle(request, async () => {
-    const { actor } = await actorFromBearer(request.headers.get("authorization"));
+    const { actor } = await actorFromBearer(request.headers.get("authorization"), "redeem");
     const body = await readJson(request, redeemSchema);
     return json(await redeemGrant(actor, body.grantId, request));
   });

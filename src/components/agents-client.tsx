@@ -7,8 +7,11 @@ type TokenRow = {
   id: string;
   name: string;
   prefix: string;
+  scopes: string[];
   revokedAt: string | null;
   createdAt: string | null;
+  expiresAt: string | null;
+  expired: boolean;
 };
 
 export function AgentsClient() {
@@ -41,12 +44,21 @@ export function AgentsClient() {
     await load();
   }
 
+  async function rotate(id: string) {
+    const created = await api<{ token: string }>(`/api/agent/tokens/${id}/rotate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setFresh(created.token);
+    await load();
+  }
+
   return (
     <section>
       <h1>Agentes</h1>
       <p className="note">
         El token identifica al agente. No es una credencial de terceros: solo puede pedir uso y canjear un sobre.
-        Se muestra una vez.
+        Vence a los 90 días. Se muestra una vez. Rotarlo invalida el anterior.
       </p>
       {error ? <p className="alert" role="alert">{error}</p> : null}
       {fresh ? (
@@ -68,14 +80,19 @@ export function AgentsClient() {
           <article key={row.id} className="row">
             <div>
               <strong>{row.name}</strong>
-              <div className="note">{row.prefix}…</div>
+              <div className="note">{row.prefix}… · {row.scopes.join(", ")}</div>
             </div>
-            <div>{row.revokedAt ? "revocado" : "activo"}</div>
-            <div className="note">{row.createdAt?.slice(0, 10)}</div>
+            <div>{row.revokedAt ? "revocado" : row.expired ? "vencido" : "activo"}</div>
+            <div className="note">{row.expiresAt?.slice(0, 10)}</div>
             {!row.revokedAt ? (
-              <button className="btn-danger" type="button" onClick={() => void revoke(row.id).catch((cause: Error) => setError(cause.message))}>
-                Revocar
-              </button>
+              <div className="toolbar">
+                <button className="btn-ghost" type="button" onClick={() => void rotate(row.id).catch((cause: Error) => setError(cause.message))}>
+                  Rotar
+                </button>
+                <button className="btn-danger" type="button" onClick={() => void revoke(row.id).catch((cause: Error) => setError(cause.message))}>
+                  Revocar
+                </button>
+              </div>
             ) : <span />}
           </article>
         ))}

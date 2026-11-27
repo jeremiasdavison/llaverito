@@ -1,5 +1,5 @@
 import { assertSameOrigin, handle, json, readJson } from "@/lib/http";
-import { requireUser } from "@/lib/session";
+import { requireRelease } from "@/lib/release-auth";
 import { rotateSchema } from "@/lib/validate";
 import { rotateItem } from "@/lib/vault";
 
@@ -11,7 +11,7 @@ type Context = { params: Promise<{ id: string }> };
 export const POST = (request: Request, context: Context) =>
   handle(request, async () => {
     assertSameOrigin(request);
-    const actor = await requireUser();
+    const actor = await requireRelease(request);
     const { id } = await context.params;
     const body = await readJson(request, rotateSchema);
     return json(await rotateItem(actor, id, { ...body, publicKey: body.publicKey || undefined }, request));

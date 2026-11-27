@@ -168,6 +168,18 @@ textarea { min-height: 120px; resize: vertical; }
 .mono { font-family: ui-monospace, monospace; font-size: 0.86rem; white-space: pre-wrap; word-break: break-all; }
 .check { display: flex; gap: 8px; align-items: center; color: var(--text); }
 .check input { width: auto; }
+.meter { height: 6px; background: var(--bg-sunken); border-radius: 99px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--brass); }
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 6, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 20;
+}
+.overlay .panel { width: min(440px, 100%); display: grid; gap: 12px; }
 
 @media (max-width: 860px) {
   .steps, .shell, .layout, .split, .row { grid-template-columns: 1fr; }

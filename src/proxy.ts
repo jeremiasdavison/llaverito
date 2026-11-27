@@ -32,6 +32,8 @@ export function proxy(request: NextRequest) {
     "form-action 'self'",
     "frame-ancestors 'none'",
     "frame-src 'none'",
+    "worker-src 'none'",
+    "manifest-src 'self'",
     process.env.VERCEL ? "upgrade-insecure-requests" : "",
   ]
     .filter(Boolean)

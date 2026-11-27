@@ -1,10 +1,19 @@
 export class HttpError extends Error {
   status: number;
+  code?: string;
+  details?: Record<string, string | number | boolean | null>;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: Record<string, string | number | boolean | null>,
+  ) {
     super(message);
     this.name = "HttpError";
     this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 

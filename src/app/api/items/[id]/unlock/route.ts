@@ -1,5 +1,5 @@
 import { assertSameOrigin, handle, json, readJson } from "@/lib/http";
-import { requireUser } from "@/lib/session";
+import { requireRelease } from "@/lib/release-auth";
 import { unlockSchema } from "@/lib/validate";
 import { unlockItem } from "@/lib/vault";
 
@@ -11,7 +11,7 @@ type Context = { params: Promise<{ id: string }> };
 export const POST = (request: Request, context: Context) =>
   handle(request, async () => {
     assertSameOrigin(request);
-    const actor = await requireUser();
+    const actor = await requireRelease(request);
     const { id } = await context.params;
     await readJson(request, unlockSchema);
     return json(await unlockItem(actor, id, request));

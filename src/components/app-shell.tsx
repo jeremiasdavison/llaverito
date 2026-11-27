@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { StepUpDialog } from "@/components/step-up-dialog";
 
 const links = [
   { href: "/app", label: "Bóveda" },
   { href: "/app/requests", label: "Solicitudes" },
   { href: "/app/agents", label: "Agentes" },
   { href: "/app/audit", label: "Auditoría" },
+  { href: "/app/security", label: "Seguridad" },
 ];
 
 export function AppShell({
@@ -52,6 +54,7 @@ export function AppShell({
         </div>
       </aside>
       <div className="main">{children}</div>
+      <StepUpDialog />
     </div>
   );
 }

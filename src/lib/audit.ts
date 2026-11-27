@@ -5,7 +5,7 @@ import { clientIp } from "./http";
 import { auditEvent, folder, item } from "./schema";
 import type { Actor } from "./types";
 
-const SAFE_META = /^(kind|name|permission|folderId|itemCount|prefix|status|envKey|resourceType)$/;
+const SAFE_META = /^(kind|name|permission|folderId|itemCount|prefix|status|envKey|resourceType|scopes|ttlDays)$/;
 
 function cleanMeta(metadata: Record<string, string | number | boolean | null>) {
   const output: Record<string, string | number | boolean | null> = {};

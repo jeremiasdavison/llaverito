@@ -96,6 +96,13 @@ export const decisionSchema = z.object({
 
 export const agentTokenSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  scopes: z.array(z.enum(["read", "request", "redeem"])).min(1).max(3).optional(),
+  ttlDays: z.number().int().min(1).max(90).optional(),
+});
+
+export const stepUpSchema = z.object({
+  password: z.string().min(1).max(128),
+  code: z.string().trim().max(40).optional().or(z.literal("")),
 });
 
 export const redeemSchema = z.object({

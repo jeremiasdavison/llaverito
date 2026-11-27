@@ -14,7 +14,10 @@ test("schema sql stays idempotent and covers every drizzle table", async () => {
   });
   assert.ok(calls.length > statements.length);
   for (const call of calls.slice(0, -1)) {
-    assert.match(call.statement, /CREATE (TABLE|INDEX|UNIQUE INDEX) IF NOT EXISTS/);
+    assert.match(
+      call.statement,
+      /CREATE (TABLE|INDEX|UNIQUE INDEX) IF NOT EXISTS|ADD COLUMN IF NOT EXISTS|^UPDATE .+ WHERE .+ IS NULL|ALTER COLUMN \S+ SET (DEFAULT|NOT NULL)/,
+    );
     assert.equal(call.statement.includes("DROP "), false);
   }
   const journal = calls.at(-1);

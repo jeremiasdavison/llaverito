@@ -4,6 +4,7 @@ export const statements = [
     "name" text NOT NULL,
     "email" text NOT NULL UNIQUE,
     "emailVerified" boolean NOT NULL DEFAULT false,
+    "twoFactorEnabled" boolean NOT NULL DEFAULT false,
     "image" text,
     "createdAt" timestamptz NOT NULL DEFAULT now(),
     "updatedAt" timestamptz NOT NULL DEFAULT now()
@@ -93,6 +94,8 @@ export const statements = [
     name text NOT NULL,
     token_hash text NOT NULL UNIQUE,
     token_prefix text NOT NULL,
+    scopes text NOT NULL DEFAULT 'read,request,redeem',
+    expires_at timestamptz,
     revoked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     last_used_at timestamptz
@@ -153,4 +156,22 @@ export const statements = [
     id text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorEnabled" boolean NOT NULL DEFAULT false`,
+  `CREATE TABLE IF NOT EXISTS "twoFactor" (
+    "id" text PRIMARY KEY,
+    "secret" text NOT NULL,
+    "backupCodes" text NOT NULL,
+    "userId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "verified" boolean NOT NULL DEFAULT true,
+    "failedVerificationCount" integer NOT NULL DEFAULT 0,
+    "lockedUntil" timestamptz
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS two_factor_user_id_idx ON "twoFactor" ("userId")`,
+  `ALTER TABLE agent_token ADD COLUMN IF NOT EXISTS scopes text`,
+  `ALTER TABLE agent_token ADD COLUMN IF NOT EXISTS expires_at timestamptz`,
+  `UPDATE agent_token SET scopes = 'read,request,redeem' WHERE scopes IS NULL OR scopes = ''`,
+  `UPDATE agent_token SET expires_at = created_at + interval '90 days' WHERE expires_at IS NULL`,
+  `ALTER TABLE agent_token ALTER COLUMN scopes SET DEFAULT 'read,request,redeem'`,
+  `ALTER TABLE agent_token ALTER COLUMN scopes SET NOT NULL`,
+  `ALTER TABLE agent_token ALTER COLUMN expires_at SET NOT NULL`,
 ];

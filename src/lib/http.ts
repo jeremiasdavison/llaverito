@@ -1,3 +1,4 @@
+import { trustedClientIp } from "./client-ip";
 import {
   CONFIG_MISSING_MESSAGE,
   ConfigError,
@@ -7,6 +8,7 @@ import {
   DatabaseError,
   HttpError,
 } from "./errors";
+import { sameOriginAllowed } from "./origin-check";
 import { safeLog } from "./redact";
 import type { ZodType } from "zod";
 
@@ -21,25 +23,11 @@ export function json(body: unknown, status = 200) {
 }
 
 export function clientIp(request: Request): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const value = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "";
-  return value ? value.slice(0, 64) : null;
+  return trustedClientIp(request.headers);
 }
 
 export function assertSameOrigin(request: Request) {
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite === "cross-site") throw new HttpError(403, "Origen no permitido");
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!origin || !host) throw new HttpError(403, "Origen no permitido");
-  let originHost = "";
-  try {
-    originHost = new URL(origin).host;
-  } catch {
-    throw new HttpError(403, "Origen no permitido");
-  }
-  const allowed = new Set(host.split(",").map((entry) => entry.trim()));
-  if (!allowed.has(originHost)) throw new HttpError(403, "Origen no permitido");
+  if (!sameOriginAllowed(request)) throw new HttpError(403, "Origen no permitido");
 }
 
 export async function readJson<T>(request: Request, schema: ZodType<T>): Promise<T> {
@@ -96,7 +84,12 @@ export function serviceErrorResponse(error: unknown): Response | null {
 
 export function handle(request: Request, fn: () => Promise<Response>) {
   return fn().catch((error: unknown) => {
-    if (error instanceof HttpError) return json({ error: error.message }, error.status);
+    if (error instanceof HttpError) {
+      return json(
+        { error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.details ?? {}) },
+        error.status,
+      );
+    }
     const mapped = serviceErrorResponse(error);
     if (mapped) return mapped;
     safeLog("request failed", {
