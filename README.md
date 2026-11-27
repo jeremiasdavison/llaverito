@@ -12,36 +12,54 @@ Cofre para que un agente use API keys y claves SSH sin ver el secreto. La person
 
 ## Variables
 
-Copiá `.env.example` a `.env.local`. Generá cada secreto con `openssl rand -base64 32` y no lo subas.
+Copiá `.env.example` a `.env.local`. Generá cada secreto con `openssl rand -base64 32` y no lo subas. El detalle del deploy está en [docs/deploy.md](docs/deploy.md).
 
 | Variable | Dónde | Notas |
 | --- | --- | --- |
-| `DATABASE_URL` | Vercel, tipo Secret | Postgres de Neon, string con pooler. También se acepta `POSTGRES_URL`. |
-| `BETTER_AUTH_SECRET` | Vercel, tipo Secret | 32 caracteres o más. Distinto en Production y Preview si el equipo lo exige. |
-| `BETTER_AUTH_URL` | Solo Production | La URL canónica, por ejemplo `https://llaverito.vercel.app`. En Preview dejala sin definir. |
-| `ENCRYPTION_KEY` | Vercel, tipo Secret | Base64 de 32 bytes. Cifra el material. Cambiarla deja los secretos viejos ilegibles. |
+| `DATABASE_URL` | Vercel, tipo Secret, Production + Preview + Development | Postgres de Neon, string con pooler y `sslmode=require`. También se acepta `POSTGRES_URL`. La pone `vercel integration add neon`. |
+| `BETTER_AUTH_SECRET` | Vercel, tipo Secret, los tres entornos | 32 caracteres o más. Distinto en Production y Preview si el equipo lo exige. |
+| `BETTER_AUTH_URL` | Solo Production, tipo Config | `https://llaverito-six.vercel.app`. En Preview y en local, sin definir. |
+| `ENCRYPTION_KEY` | Vercel, tipo Secret, los tres entornos | Base64 de 32 bytes. Cifra el material. Cambiarla deja los secretos viejos ilegibles. No la regeneres si ya está cargada. |
 
 En local: `npm install`, `npm run db:migrate`, `npm run dev`.
 
 ## Deploy en Vercel
 
-El CLI de este entorno no tiene sesión de Vercel. Falta este paso, a mano:
+Checklist para https://llaverito-six.vercel.app. Los valores salen de un archivo, no del argumento del comando.
 
 ```bash
 npx vercel login
 npx vercel link
-npx vercel integration add neon
-openssl rand -base64 32 > /tmp/llaverito-encryption
-openssl rand -base64 32 > /tmp/llaverito-auth
-npx vercel env add ENCRYPTION_KEY production,preview --type secret < /tmp/llaverito-encryption
-npx vercel env add ENCRYPTION_KEY development --type secret < /tmp/llaverito-encryption
-npx vercel env add BETTER_AUTH_SECRET production,preview --type secret < /tmp/llaverito-auth
-npx vercel env add BETTER_AUTH_SECRET development --type secret < /tmp/llaverito-auth
-rm /tmp/llaverito-encryption /tmp/llaverito-auth
-npx vercel deploy
+npx vercel integration add neon --environment production --environment preview --environment development
 ```
 
-Si la política del equipo pide un valor de Production distinto, generá otro archivo y no reutilices el de Preview. `BETTER_AUTH_URL` se agrega recién cuando exista el dominio de producción. Después de conectar Neon, un deploy nuevo toma `DATABASE_URL`. El esquema se crea solo en el primer request.
+Eso crea la base y carga `DATABASE_URL`. Si `BETTER_AUTH_SECRET` o `ENCRYPTION_KEY` todavía no existen:
+
+```bash
+openssl rand -base64 32 > /tmp/llaverito-encryption
+openssl rand -base64 32 > /tmp/llaverito-auth
+npx vercel env add ENCRYPTION_KEY production --type secret < /tmp/llaverito-encryption
+npx vercel env add ENCRYPTION_KEY preview --type secret < /tmp/llaverito-encryption
+npx vercel env add ENCRYPTION_KEY development --type secret < /tmp/llaverito-encryption
+npx vercel env add BETTER_AUTH_SECRET production --type secret < /tmp/llaverito-auth
+npx vercel env add BETTER_AUTH_SECRET preview --type secret < /tmp/llaverito-auth
+npx vercel env add BETTER_AUTH_SECRET development --type secret < /tmp/llaverito-auth
+rm /tmp/llaverito-encryption /tmp/llaverito-auth
+printf 'https://llaverito-six.vercel.app' > /tmp/llaverito-url
+npx vercel env add BETTER_AUTH_URL production --type config < /tmp/llaverito-url
+rm /tmp/llaverito-url
+npx vercel deploy --prod
+```
+
+`npm run build` aplica el esquema cuando la URL está en el entorno. Si no está, el build sigue y el primer request lo aplica. `npm run db:migrate` hace lo mismo a mano.
+
+Verificación:
+
+```bash
+curl -sS https://llaverito-six.vercel.app/api/health
+```
+
+Tiene que dar 200 y `"ok": true`. Después creá la cuenta en `/sign-up`, entrá a `/app` y guardá un secreto. Si sigue en 503, el JSON dice qué variable falta (`missing`), cuál está mal (`invalid`) y si la base no está (`database: missing`) o no responde (`database: down`).
 
 ## Agente y entorno de proyecto
 
@@ -49,7 +67,8 @@ Una carpeta de proyecto puede mapear elementos a variables (`OPENAI_API_KEY`). *
 
 ## Límites de este PoC
 
-- No verifica el email ni pide un segundo factor para revelar.
+- No verifica el email, no recupera la contraseña y no pide un segundo factor para revelar.
+- No exporta un backup cifrado de la bóveda. Un dump de Neon sigue cifrado con `ENCRYPTION_KEY`.
 - El límite de intentos de la app vive en Postgres; el de Better Auth también, pero no hay un WAF aparte.
 - No hay rotación de `ENCRYPTION_KEY` ni borrado criptográfico más allá de pisar el sobre al revocar.
 - El token de agente es un secreto de larga vida. La federación OIDC queda para después.
