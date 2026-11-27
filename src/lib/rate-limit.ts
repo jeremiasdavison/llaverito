@@ -1,10 +1,15 @@
 import "server-only";
-import { HttpError } from "./errors";
 import { getSql } from "./db";
+import { HttpError } from "./errors";
+import { consumeMemoryLimit } from "./rate-limit-memory";
 
 export async function consumeRateLimit(bucket: string, max: number, windowSeconds: number) {
+  const memory = consumeMemoryLimit(bucket, max, windowSeconds);
+  if (!memory.allowed) throw new HttpError(429, "Demasiados intentos. Esperá un momento.", "RATE_LIMITED");
   const sql = await getSql();
-  const rows = (await sql`
+  let rows: { count?: number }[];
+  try {
+    rows = (await sql`
     insert into app_rate_limit (bucket, count, expires_at)
     values (${bucket}, 1, now() + make_interval(secs => ${windowSeconds}))
     on conflict (bucket) do update set
@@ -18,6 +23,13 @@ export async function consumeRateLimit(bucket: string, max: number, windowSecond
       end
     returning count
   `) as unknown as { count?: number }[];
-  const count = Number(rows[0]?.count ?? 0);
-  if (count > max) throw new HttpError(429, "Demasiados intentos. Esperá un momento.");
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(503, "No se pudo verificar el límite de intentos. Probá de nuevo.", "RATE_LIMIT_UNAVAILABLE");
+  }
+  const count = Number(rows[0]?.count);
+  if (!Number.isFinite(count)) {
+    throw new HttpError(503, "No se pudo verificar el límite de intentos. Probá de nuevo.", "RATE_LIMIT_UNAVAILABLE");
+  }
+  if (count > max) throw new HttpError(429, "Demasiados intentos. Esperá un momento.", "RATE_LIMITED");
 }

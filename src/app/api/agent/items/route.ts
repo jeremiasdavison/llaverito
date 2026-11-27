@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = (request: Request) =>
   handle(request, async () => {
-    const { actor } = await actorFromBearer(request.headers.get("authorization"));
+    const { actor } = await actorFromBearer(request.headers.get("authorization"), "read");
     const vault = await listVault(actor);
     return json({
       folders: vault.folders,

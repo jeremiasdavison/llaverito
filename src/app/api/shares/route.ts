@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HttpError } from "@/lib/errors";
 import { assertSameOrigin, handle, json, readJson } from "@/lib/http";
+import { requireRelease } from "@/lib/release-auth";
 import { requireUser } from "@/lib/session";
 import { shareSchema } from "@/lib/validate";
 import { createShare, listShares } from "@/lib/vault";
@@ -28,7 +29,7 @@ export const GET = (request: Request) =>
 export const POST = (request: Request) =>
   handle(request, async () => {
     assertSameOrigin(request);
-    const actor = await requireUser();
+    const actor = await requireRelease(request);
     const body = await readJson(request, shareSchema);
     return json(await createShare(actor, body, request), 201);
   });
