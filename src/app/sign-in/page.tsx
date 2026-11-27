@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { AuthForm } from "@/components/auth-form";
 import { safeAppPath } from "@/lib/paths";
+
+export const metadata: Metadata = { title: "Entrar · Llaverito" };
 
 export default async function SignInPage({
   searchParams,

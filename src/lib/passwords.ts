@@ -75,20 +75,73 @@ function hasRun(password: string): boolean {
   return false;
 }
 
+export type PasswordRuleId = "length" | "mix" | "repeat" | "run" | "variety" | "common";
+export type PasswordRule = { id: PasswordRuleId; label: string; ok: boolean };
+
+type PasswordCheck = {
+  id: PasswordRuleId;
+  label: string;
+  /** Mensaje de error si la regla falla, o null si se cumple. */
+  issue: (password: string) => string | null;
+};
+
+// Fuente única de la política: passwordIssues (servidor) y passwordRules (checklist en vivo)
+// se derivan de esta lista, así que la UI no puede prometer menos de lo que exige el servidor.
+const CHECKS: PasswordCheck[] = [
+  {
+    id: "length",
+    label: "Entre 12 y 128 caracteres",
+    issue: (password) =>
+      password.length < 12
+        ? "Usá al menos 12 caracteres."
+        : password.length > 128
+          ? "Como máximo 128 caracteres."
+          : null,
+  },
+  {
+    id: "mix",
+    label: "Letras y números, o una frase de 16+ caracteres con espacios o guiones",
+    issue: (password) => {
+      const passphrase = password.length >= 16 && /[\s-]/.test(password);
+      return !passphrase && (!/[A-Za-z]/.test(password) || !/\d/.test(password))
+        ? "Incluí letras y números, o una frase de 16 caracteres o más."
+        : null;
+    },
+  },
+  {
+    id: "repeat",
+    label: "Sin repetir el mismo carácter 8 veces o más",
+    issue: (password) => (/(.)\1{7,}/.test(password) ? "Evitá repetir el mismo carácter." : null),
+  },
+  {
+    id: "run",
+    label: "Sin secuencias como 123456, abcdef o qwerty",
+    issue: (password) => (hasRun(password) ? "Evitá secuencias como 123456 o qwerty." : null),
+  },
+  {
+    id: "variety",
+    label: "Si tiene menos de 16 caracteres, al menos 6 caracteres distintos",
+    issue: (password) =>
+      password.length < 16 && new Set(password.toLowerCase()).size < 6 ? "Usá una contraseña más variada." : null,
+  },
+  {
+    id: "common",
+    label: "Que no sea una contraseña común (password123, admin123…)",
+    issue: (password) => (isCommonShape(password) ? "Es una contraseña demasiado común." : null),
+  },
+];
+
+/** Checklist en vivo para el alta: refleja exactamente la política de passwordIssues. */
+export function passwordRules(password: string): PasswordRule[] {
+  return CHECKS.map((check) => ({ id: check.id, label: check.label, ok: check.issue(password) === null }));
+}
+
 export function passwordIssues(password: string): string[] {
   const issues: string[] = [];
-  if (password.length < 12) issues.push("Usá al menos 12 caracteres.");
-  if (password.length > 128) issues.push("Como máximo 128 caracteres.");
-  const passphrase = password.length >= 16 && /[\s-]/.test(password);
-  if (!passphrase && (!/[A-Za-z]/.test(password) || !/\d/.test(password))) {
-    issues.push("Incluí letras y números, o una frase de 16 caracteres o más.");
+  for (const check of CHECKS) {
+    const issue = check.issue(password);
+    if (issue) issues.push(issue);
   }
-  if (/(.)\1{7,}/.test(password)) issues.push("Evitá repetir el mismo carácter.");
-  if (hasRun(password)) issues.push("Evitá secuencias como 123456 o qwerty.");
-  if (password.length < 16 && new Set(password.toLowerCase()).size < 6) {
-    issues.push("Usá una contraseña más variada.");
-  }
-  if (isCommonShape(password)) issues.push("Es una contraseña demasiado común.");
   return issues;
 }
 

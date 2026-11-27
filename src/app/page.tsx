@@ -1,13 +1,22 @@
 import Link from "next/link";
+import { Mark } from "@/components/mark";
 
 export default function HomePage() {
   return (
     <main className="landing">
-      <div className="mark">
-        <i aria-hidden="true" />
-        Llaverito
-      </div>
+      <header className="landing-bar">
+        <Mark />
+        <nav className="actions" aria-label="Cuenta">
+          <Link className="btn-ghost" href="/sign-in">
+            Entrar
+          </Link>
+          <Link className="btn" href="/sign-up">
+            Crear cuenta
+          </Link>
+        </nav>
+      </header>
       <section className="hero">
+        <p className="eyebrow">Cofre para agentes</p>
         <h1>Las llaves las usa el agente. El secreto se queda en el cofre.</h1>
         <p className="lede">
           Guardá API keys y claves SSH cifradas. Cuando un agente las necesite, vos aprobás.
@@ -18,11 +27,28 @@ export default function HomePage() {
             Crear cuenta
           </Link>
           <Link className="btn-ghost" href="/sign-in">
-            Entrar
+            Ya tengo cuenta
           </Link>
         </div>
       </section>
-      <section className="steps" aria-label="Cómo funciona">
+      <section className="promise-grid" aria-label="Qué no ve el modelo">
+        <article className="card">
+          <p className="eyebrow">Chat</p>
+          <h2>El modelo no recibe el valor</h2>
+          <p>La aprobación confirma el uso. No pega la clave en la respuesta que lee el agente.</p>
+        </article>
+        <article className="card">
+          <p className="eyebrow">Lista</p>
+          <h2>La bóveda no lista el secreto</h2>
+          <p>Nombre, tipo y una pista. Revelar es otra acción, queda en la auditoría y se oculta solo.</p>
+        </article>
+        <article className="card">
+          <p className="eyebrow">Compartir</p>
+          <h2>Un permiso, no un archivo</h2>
+          <p>Invitar por email da uso o administración. El mensaje no lleva el texto plano.</p>
+        </article>
+      </section>
+      <section className="steps" id="como-funciona" aria-label="Cómo funciona">
         <article className="step">
           <span>01</span>
           <h2>Guardás</h2>
@@ -39,6 +65,7 @@ export default function HomePage() {
           <p>La respuesta es un grant corto. El runner lo abre fuera del modelo y lo inyecta.</p>
         </article>
       </section>
+      <p className="note landing-foot">No hay una cuenta de demostración. La primera vez creás la tuya y cargás tus llaves.</p>
     </main>
   );
 }
