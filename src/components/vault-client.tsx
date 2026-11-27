@@ -63,6 +63,7 @@ export function VaultClient() {
   const [hiddenNote, setHiddenNote] = useState<string | null>(null);
   const [shares, setShares] = useState<ShareRow[]>([]);
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [manifestStatus, setManifestStatus] = useState<"hidden" | "loading" | "ready">("hidden");
   const [busy, setBusy] = useState<string | null>(null);
   const [revealId, setRevealId] = useState<string | null>(null);
   const [itemKind, setItemKind] = useState<"api_key" | "ssh_key">("api_key");
@@ -105,28 +106,42 @@ export function VaultClient() {
   const folderKind = folder?.kind ?? null;
 
   useEffect(() => {
-    if (!folderId || !canAdmin) {
+    if (!folderId) {
       setShares([]);
       setManifest(null);
+      setManifestStatus("hidden");
       return;
     }
     let cancelled = false;
-    void api<ShareRow[]>(`/api/shares?resourceType=folder&resourceId=${folderId}`)
-      .then((rows) => {
-        if (!cancelled) setShares(rows);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(errorMessage(cause));
-      });
-    if (folderKind === "project") {
-      void api<Manifest>(`/api/folders/${folderId}/env`)
-        .then((next) => {
-          if (!cancelled) setManifest(next);
+    if (canAdmin) {
+      void api<ShareRow[]>(`/api/shares?resourceType=folder&resourceId=${folderId}`)
+        .then((rows) => {
+          if (!cancelled) setShares(rows);
         })
         .catch((cause: unknown) => {
           if (!cancelled) setError(errorMessage(cause));
         });
-    } else setManifest(null);
+    } else {
+      setShares([]);
+    }
+    if (folderKind === "project") {
+      setManifestStatus("loading");
+      void api<Manifest>(`/api/folders/${folderId}/env`)
+        .then((next) => {
+          if (cancelled) return;
+          setManifest(next);
+          setManifestStatus("ready");
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return;
+          setManifest(null);
+          setManifestStatus("ready");
+          setError(errorMessage(cause));
+        });
+    } else {
+      setManifest(null);
+      setManifestStatus("hidden");
+    }
     return () => {
       cancelled = true;
     };
@@ -516,7 +531,11 @@ export function VaultClient() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(manifest?.entries ?? []).length === 0 ? (
+                        {manifestStatus === "loading" ? (
+                          <tr>
+                            <td colSpan={4} data-label="Estado">Cargando el entorno…</td>
+                          </tr>
+                        ) : (manifest?.entries ?? []).length === 0 ? (
                           <tr>
                             <td colSpan={4} data-label="Estado">Todavía no hay variables.</td>
                           </tr>
@@ -563,24 +582,24 @@ export function VaultClient() {
                       <button className="btn" type="submit" disabled={busy === "share"}>Compartir</button>
                     </form>
                   ) : (
-                    <p className="note">Tu acceso es de uso. No podés invitar ni revelar.</p>
+                    <p className="note">Tu acceso es de uso. No podés invitar ni revelar. Quién más tiene la carpeta lo ve quien administra.</p>
                   )}
-                  <div className="panel">
-                    {shares.length === 0 ? <p className="empty">Nadie más tiene esta carpeta.</p> : null}
-                    {shares.map((share) => (
-                      <div className="person" key={share.id}>
-                        <div>
-                          <strong>{share.granteeEmail}</strong>
-                          <div className="tag">{share.permission === "admin" ? "admin" : "uso"}</div>
-                        </div>
-                        {canAdmin ? (
+                  {canAdmin ? (
+                    <div className="panel">
+                      {shares.length === 0 ? <p className="empty">Nadie más tiene esta carpeta.</p> : null}
+                      {shares.map((share) => (
+                        <div className="person" key={share.id}>
+                          <div>
+                            <strong>{share.granteeEmail}</strong>
+                            <div className="tag">{share.permission === "admin" ? "admin" : "uso"}</div>
+                          </div>
                           <button className="btn-danger" type="button" disabled={busy === share.id} onClick={() => void removeShare(share.id)}>
                             Quitar
                           </button>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
