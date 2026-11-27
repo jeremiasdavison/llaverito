@@ -152,6 +152,10 @@ export const statements = [
     count integer NOT NULL,
     expires_at timestamptz NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS schema_migration (
+    id text PRIMARY KEY,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorEnabled" boolean NOT NULL DEFAULT false`,
   `CREATE TABLE IF NOT EXISTS "twoFactor" (
     "id" text PRIMARY KEY,

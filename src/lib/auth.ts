@@ -158,7 +158,10 @@ async function createAuth() {
 
 export function getAuth() {
   if (singleton) return singleton;
-  const created = createAuth();
+  const created = createAuth().catch((error: unknown) => {
+    if (singleton === created) singleton = null;
+    throw error;
+  });
   singleton = created;
   return created;
 }

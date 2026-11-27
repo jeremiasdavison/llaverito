@@ -1,5 +1,13 @@
 import { trustedClientIp } from "./client-ip";
-import { ConfigError, HttpError } from "./errors";
+import {
+  CONFIG_MISSING_MESSAGE,
+  ConfigError,
+  DATABASE_MISSING_MESSAGE,
+  DATABASE_UNAVAILABLE_MESSAGE,
+  DatabaseConfigError,
+  DatabaseError,
+  HttpError,
+} from "./errors";
 import { sameOriginAllowed } from "./origin-check";
 import { safeLog } from "./redact";
 import type { ZodType } from "zod";
@@ -40,6 +48,40 @@ export async function readJson<T>(request: Request, schema: ZodType<T>): Promise
   return result.data;
 }
 
+export function serviceErrorResponse(error: unknown): Response | null {
+  if (error instanceof DatabaseError) {
+    return json(
+      {
+        message: DATABASE_UNAVAILABLE_MESSAGE,
+        error: DATABASE_UNAVAILABLE_MESSAGE,
+        code: "DATABASE_UNAVAILABLE",
+      },
+      503,
+    );
+  }
+  if (error instanceof DatabaseConfigError) {
+    return json(
+      {
+        message: DATABASE_MISSING_MESSAGE,
+        error: DATABASE_MISSING_MESSAGE,
+        code: "DATABASE_MISSING",
+      },
+      503,
+    );
+  }
+  if (error instanceof ConfigError) {
+    return json(
+      {
+        message: CONFIG_MISSING_MESSAGE,
+        error: CONFIG_MISSING_MESSAGE,
+        code: "SERVICE_UNAVAILABLE",
+      },
+      503,
+    );
+  }
+  return null;
+}
+
 export function handle(request: Request, fn: () => Promise<Response>) {
   return fn().catch((error: unknown) => {
     if (error instanceof HttpError) {
@@ -48,15 +90,8 @@ export function handle(request: Request, fn: () => Promise<Response>) {
         error.status,
       );
     }
-    if (error instanceof ConfigError) {
-      return json(
-        {
-          error:
-            "Falta configurar la base o las claves. Revisá DATABASE_URL, BETTER_AUTH_SECRET y ENCRYPTION_KEY.",
-        },
-        503,
-      );
-    }
+    const mapped = serviceErrorResponse(error);
+    if (mapped) return mapped;
     safeLog("request failed", {
       path: new URL(request.url).pathname,
       name: error instanceof Error ? error.name : "Error",
