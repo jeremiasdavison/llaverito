@@ -330,9 +330,35 @@ fieldset {
 }
 legend { padding: 0 6px; color: var(--muted); }
 .panel ul, .request-card ul { margin: 8px 0; padding-left: 1.1rem; color: var(--muted); }
-.toolbar { align-items: end; margin: 16px 0; }
+/* Toolbar único: formulario de #7 (campo + botón alineados abajo) y acciones de #5 (rotar/revocar, step-up). */
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin: 16px 0; }
 .toolbar .field { margin: 0; flex: 1; min-width: min(100%, 220px); }
+.overlay .toolbar { margin: 4px 0 0; }
 .inline-form { display: grid; }
+/* Estilos de #5. .list-btn[aria-pressed], .tag, .secret-box, .stack, .mono y .check ya están definidos
+   arriba con los tokens del frontend (misma intención); acá van solo los que no existían. */
+.table { display: grid; gap: 8px; }
+.row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.6fr 0.8fr auto;
+  gap: 8px;
+  align-items: center;
+  border-color: var(--line);
+  background: var(--bg-raise);
+}
+.row.revoked { opacity: 0.55; text-decoration: line-through; }
+.meter { height: 6px; margin-top: 8px; background: var(--bg-sunken); border-radius: 99px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--brass); transition: width 160ms ease; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 6, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 20;
+}
+.overlay .panel { width: min(440px, 100%); display: grid; gap: 12px; }
 
 @media (max-width: 719px) {
   .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
@@ -354,6 +380,7 @@ legend { padding: 0 6px; color: var(--muted); }
 
 @media (min-width: 720px) {
   .promise-grid, .steps { grid-template-columns: repeat(3, 1fr); }
+  .split { grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
   .item { grid-template-columns: 1fr auto; }
   .landing { padding: 28px 24px 88px; }
   .hero { margin-top: 72px; }

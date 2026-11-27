@@ -9,7 +9,7 @@ type Context = { params: Promise<{ id: string }> };
 
 export const GET = (request: Request, context: Context) =>
   handle(request, async () => {
-    const { actor } = await actorFromBearer(request.headers.get("authorization"));
+    const { actor } = await actorFromBearer(request.headers.get("authorization"), "read");
     const { id } = await context.params;
     return json(await agentRequestStatus(actor, id));
   });

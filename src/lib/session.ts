@@ -4,14 +4,19 @@ import { getAuth } from "./auth";
 import { ConfigError, HttpError } from "./errors";
 import type { Actor } from "./types";
 
-export async function getSessionUser(): Promise<Actor | null> {
+export type SessionContext = { user: Actor; sessionId: string };
+
+export async function getSessionContext(): Promise<SessionContext | null> {
   try {
     const session = await (await getAuth()).api.getSession({ headers: await headers() });
-    if (!session?.user) return null;
+    if (!session?.user || !session.session?.id) return null;
     return {
-      id: session.user.id,
-      email: session.user.email.toLowerCase(),
-      name: session.user.name,
+      user: {
+        id: session.user.id,
+        email: session.user.email.toLowerCase(),
+        name: session.user.name,
+      },
+      sessionId: session.session.id,
     };
   } catch (error) {
     if (error instanceof ConfigError) throw error;
@@ -19,8 +24,17 @@ export async function getSessionUser(): Promise<Actor | null> {
   }
 }
 
+export async function getSessionUser(): Promise<Actor | null> {
+  const context = await getSessionContext();
+  return context?.user ?? null;
+}
+
+export async function requireSession() {
+  const context = await getSessionContext();
+  if (!context) throw new HttpError(401, "Tenés que iniciar sesión");
+  return context;
+}
+
 export async function requireUser() {
-  const user = await getSessionUser();
-  if (!user) throw new HttpError(401, "Tenés que iniciar sesión");
-  return user;
+  return (await requireSession()).user;
 }

@@ -4,9 +4,9 @@ Llaverito no entrega el secreto en la respuesta de aprobación. El runner, fuera
 
 ## Identidad
 
-El token de agente (`llv_…`) solo puede listar metadatos, crear solicitudes y canjear grants. No abre el texto plano. En producción conviene cambiarlo por OIDC de GitHub Actions para no guardar un token de larga vida. Este PoC todavía usa el token.
+El token de agente (`llv_…`) solo puede listar metadatos (`read`), crear solicitudes (`request`) y canjear grants (`redeem`). No abre el texto plano. Vence a los 90 días. Rotarlo en **Agentes** invalida el anterior y muestra el nuevo una sola vez. En producción conviene cambiarlo por OIDC de GitHub Actions.
 
-Crearlo en **Agentes**. Se muestra una sola vez. Guardarlo como secreto del CI con el nombre `LLAVERITO_TOKEN`.
+Crearlo en **Agentes**, después de activar el segundo factor. Se muestra una sola vez. Guardarlo como secreto del CI con el nombre `LLAVERITO_TOKEN`.
 
 ## Manifiesto, sin valores
 

@@ -10,8 +10,11 @@ type TokenRow = {
   id: string;
   name: string;
   prefix: string;
+  scopes: string[];
   revokedAt: string | null;
   createdAt: string | null;
+  expiresAt: string | null;
+  expired: boolean;
 };
 
 export function AgentsClient() {
@@ -42,7 +45,8 @@ export function AgentsClient() {
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = String(new FormData(event.currentTarget).get("name") ?? "");
+    const form = event.currentTarget;
+    const name = String(new FormData(form).get("name") ?? "");
     setBusy(true);
     setCopyError(null);
     try {
@@ -51,7 +55,7 @@ export function AgentsClient() {
         body: JSON.stringify({ name }),
       });
       token.reveal(created.token);
-      event.currentTarget.reset();
+      form.reset();
       await load();
     } catch (cause) {
       setError(errorMessage(cause));
@@ -79,6 +83,27 @@ export function AgentsClient() {
     }
   }
 
+  async function rotate(id: string) {
+    if (!window.confirm("¿Rotar este token? El anterior deja de funcionar ahora y tenés que actualizar el secreto del CI.")) return;
+    setCopyError(null);
+    try {
+      const created = await api<{ token: string }>(`/api/agent/tokens/${id}/rotate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      token.reveal(created.token);
+      await load();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function status(row: TokenRow) {
+    if (row.revokedAt) return { label: "revocado", tone: "pill bad" };
+    if (row.expired) return { label: "vencido", tone: "pill bad" };
+    return { label: "activo", tone: "pill ok" };
+  }
+
   return (
     <section aria-busy={phase === "loading"}>
       <PageHeader
@@ -87,8 +112,11 @@ export function AgentsClient() {
         lede="El token identifica al runner. Solo puede listar metadatos, abrir solicitudes y canjear un sobre. No es una API key de un proveedor."
       />
       <div className="callout">
-        <strong>Este token sigue siendo de larga vida.</strong>
-        <p>Guardalo como secreto del CI, con el nombre LLAVERITO_TOKEN, y no lo pegues en el chat. Se muestra una sola vez.</p>
+        <strong>El token vence a los 90 días y se muestra una sola vez.</strong>
+        <p>
+          Guardalo como secreto del CI, con el nombre LLAVERITO_TOKEN, y no lo pegues en el chat. Rotarlo emite uno nuevo
+          e invalida el anterior al instante; revocarlo lo corta sin reemplazo.
+        </p>
       </div>
       {error ? (
         <p className="alert" role="alert">
@@ -134,15 +162,32 @@ export function AgentsClient() {
             <div>
               <h3>{row.name}</h3>
               <div className="meta">
-                <span className={row.revokedAt ? "pill bad" : "pill ok"}>{row.revokedAt ? "revocado" : "activo"}</span>
+                <span className={status(row).tone}>{status(row).label}</span>
                 <span className="mono faint">{row.prefix}…</span>
-                {row.createdAt ? <time className="faint" dateTime={row.createdAt}>{row.createdAt.slice(0, 10)}</time> : null}
+                {row.scopes.map((scope) => (
+                  <span key={scope} className="tag">{scope}</span>
+                ))}
+                {row.createdAt ? (
+                  <span className="faint">
+                    creado <time dateTime={row.createdAt}>{row.createdAt.slice(0, 10)}</time>
+                  </span>
+                ) : null}
+                {row.expiresAt ? (
+                  <span className="faint">
+                    {row.expired ? "venció" : "vence"} <time dateTime={row.expiresAt}>{row.expiresAt.slice(0, 10)}</time>
+                  </span>
+                ) : null}
               </div>
             </div>
             {!row.revokedAt ? (
-              <button className="btn-danger" type="button" onClick={() => void revoke(row.id)}>
-                Revocar
-              </button>
+              <div className="row-actions">
+                <button className="btn-ghost" type="button" onClick={() => void rotate(row.id)}>
+                  Rotar
+                </button>
+                <button className="btn-danger" type="button" onClick={() => void revoke(row.id)}>
+                  Revocar
+                </button>
+              </div>
             ) : null}
           </article>
         ))}
