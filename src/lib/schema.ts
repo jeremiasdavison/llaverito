@@ -136,6 +136,8 @@ export const share = pgTable(
     resourceType: text("resource_type").$type<"folder" | "item">().notNull(),
     resourceId: text("resource_id").notNull(),
     granteeEmail: text("grantee_email").notNull(),
+    // Null en filas legadas sin cuenta al compartir: no dan acceso.
+    granteeUserId: text("grantee_user_id").references(() => user.id, { onDelete: "cascade" }),
     permission: text("permission").$type<"use" | "admin">().notNull(),
     createdBy: text("created_by")
       .notNull()
@@ -144,6 +146,7 @@ export const share = pgTable(
   },
   (table) => [
     uniqueIndex("share_target").on(table.resourceType, table.resourceId, table.granteeEmail),
+    index("share_grantee_user_idx").on(table.granteeUserId),
   ],
 );
 

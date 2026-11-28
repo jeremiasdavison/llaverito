@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { folderAccess, itemAccess } from "./access";
 import { audit } from "./audit";
 import {
@@ -11,11 +11,11 @@ import {
   sealJson,
   type Envelope,
 } from "./crypto";
-import { getDb, getSql } from "./db";
+import { getDb } from "./db";
 import { HttpError } from "./errors";
 import { canAdminister, canUse } from "./permissions";
 import { consumeRateLimit } from "./rate-limit";
-import { accessRequest, accessRequestItem, envBinding, item } from "./schema";
+import { accessRequest, accessRequestItem, envBinding, item, user } from "./schema";
 import type { Actor, ItemKind } from "./types";
 
 const PENDING_MS = 24 * 60 * 60 * 1000;
@@ -176,6 +176,98 @@ async function canDecide(actor: Actor, items: { id: string }[]) {
   }
 }
 
+// El solicitante tiene que seguir pudiendo usar cada elemento (y la carpeta, si es un entorno)
+// al aprobar y al canjear. Un compartido borrado después de pedir no alcanza para recibir el sobre.
+async function requesterHasAccess(row: {
+  requesterUserId: string;
+  kind: "item" | "env_bundle";
+  folderId: string | null;
+  itemIds: string[];
+}) {
+  if (!row.itemIds.length) return false;
+  const db = await getDb();
+  const [found] = await db
+    .select({ id: user.id, email: user.email, name: user.name })
+    .from(user)
+    .where(eq(user.id, row.requesterUserId))
+    .limit(1);
+  if (!found) return false;
+  try {
+    if (row.kind === "env_bundle") {
+      if (!row.folderId) return false;
+      const loaded = await folderAccess(found, row.folderId);
+      if (!canUse(loaded.access)) return false;
+    }
+    for (const itemId of row.itemIds) {
+      const loaded = await itemAccess(found, itemId);
+      if (!canUse(loaded.access)) return false;
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof HttpError) return false;
+    throw error;
+  }
+}
+
+async function requestItemIds(requestId: string) {
+  const db = await getDb();
+  const rows = await db
+    .select({ itemId: accessRequestItem.itemId })
+    .from(accessRequestItem)
+    .where(eq(accessRequestItem.requestId, requestId));
+  return rows.map((entry) => entry.itemId);
+}
+
+// Al borrar un compartido: las solicitudes pendientes pasan a denied y los grants aprobados a
+// expired, salvo que el usuario conserve acceso por otro camino (otro compartido o dueño).
+export async function closeRequestsForRevokedShare(
+  granteeUserId: string,
+  resourceType: "folder" | "item",
+  resourceId: string,
+) {
+  const db = await getDb();
+  const open = and(
+    eq(accessRequest.requesterUserId, granteeUserId),
+    inArray(accessRequest.status, ["pending", "approved"]),
+  );
+  const touching =
+    resourceType === "item"
+      ? db
+          .select({ id: accessRequestItem.requestId })
+          .from(accessRequestItem)
+          .where(eq(accessRequestItem.itemId, resourceId))
+      : db
+          .select({ id: accessRequestItem.requestId })
+          .from(accessRequestItem)
+          .innerJoin(item, eq(item.id, accessRequestItem.itemId))
+          .where(eq(item.folderId, resourceId));
+  const candidates = await db
+    .select({
+      id: accessRequest.id,
+      status: accessRequest.status,
+      kind: accessRequest.kind,
+      folderId: accessRequest.folderId,
+      requesterUserId: accessRequest.requesterUserId,
+    })
+    .from(accessRequest)
+    .where(
+      and(
+        open,
+        resourceType === "folder"
+          ? or(eq(accessRequest.folderId, resourceId), inArray(accessRequest.id, touching))
+          : inArray(accessRequest.id, touching),
+      ),
+    );
+  for (const row of candidates) {
+    const itemIds = await requestItemIds(row.id);
+    if (await requesterHasAccess({ ...row, itemIds })) continue;
+    await db
+      .update(accessRequest)
+      .set({ status: row.status === "pending" ? "denied" : "expired" })
+      .where(and(eq(accessRequest.id, row.id), eq(accessRequest.status, row.status)));
+  }
+}
+
 export async function listRequests(actor: Actor) {
   const db = await getDb();
   const mine = await db
@@ -252,6 +344,24 @@ export async function decideRequest(
     return { id: requestId, status: "denied" as const, grantId: null, confirmation: "Solicitud cancelada." };
   }
   if (!(await canDecide(actor, items))) throw new HttpError(403, "No podés resolver esta solicitud");
+  if (
+    action === "approve" &&
+    !(await requesterHasAccess({ ...row, itemIds: await requestItemIds(requestId) }))
+  ) {
+    await db
+      .update(accessRequest)
+      .set({ status: "denied", decidedBy: actor.id, decidedAt: new Date() })
+      .where(and(eq(accessRequest.id, requestId), eq(accessRequest.status, "pending")));
+    await audit({
+      actorId: actor.id,
+      action: "request.deny",
+      resourceType: "request",
+      resourceId: requestId,
+      metadata: { status: "denied", reason: "requester_lost_access", itemCount: items.length },
+      request,
+    });
+    throw new HttpError(409, "Quien pidió ya no tiene acceso a estos elementos. La solicitud quedó rechazada.");
+  }
   if (action === "deny") {
     const updated = await db
       .update(accessRequest)
@@ -367,17 +477,40 @@ export async function redeemGrant(actor: Actor, grantId: string, request?: Reque
   if (preview.status !== "approved" || !preview.grantExpiresAt || new Date(preview.grantExpiresAt).getTime() < Date.now()) {
     throw new HttpError(410, "El grant venció o ya se usó");
   }
-  const sql = await getSql();
-  const consumed = (await sql`
-    update access_request
-    set status = 'consumed', consumed_at = now()
-    where grant_hash = ${hash}
-      and requester_user_id = ${actor.id}
-      and status = 'approved'
-      and consumed_at is null
-      and grant_expires_at > now()
-    returning id
-  `) as unknown as { id?: string }[];
+  const allowed = await requesterHasAccess({
+    requesterUserId: preview.requesterUserId,
+    kind: preview.kind,
+    folderId: preview.folderId,
+    itemIds: await requestItemIds(preview.id),
+  });
+  if (!allowed) {
+    await db
+      .update(accessRequest)
+      .set({ status: "expired" })
+      .where(and(eq(accessRequest.id, preview.id), eq(accessRequest.status, "approved")));
+    await audit({
+      actorId: actor.id,
+      action: "grant.blocked",
+      resourceType: "request",
+      resourceId: preview.id,
+      metadata: { status: "expired", reason: "access_lost" },
+      request,
+    });
+    throw new HttpError(403, "Ya no tenés acceso a lo que pide este grant. Se anuló sin revelar nada.");
+  }
+  const consumed = await db
+    .update(accessRequest)
+    .set({ status: "consumed", consumedAt: sql`now()` })
+    .where(
+      and(
+        eq(accessRequest.grantHash, hash),
+        eq(accessRequest.requesterUserId, actor.id),
+        eq(accessRequest.status, "approved"),
+        isNull(accessRequest.consumedAt),
+        gt(accessRequest.grantExpiresAt, sql`now()`),
+      ),
+    )
+    .returning({ id: accessRequest.id });
   const consumedId = consumed[0]?.id;
   if (!consumedId) throw new HttpError(410, "El grant venció o ya se usó");
   const secrets = await db

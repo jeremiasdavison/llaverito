@@ -24,7 +24,7 @@ type VaultItem = {
   access: Access;
   sharedDirectly: boolean;
 };
-type ShareRow = { id: string; granteeEmail: string; permission: "use" | "admin" };
+type ShareRow = { id: string; granteeEmail: string; permission: "use" | "admin"; active: boolean };
 type Manifest = {
   githubRepo: string | null;
   entries: { bindingId: string; envKey: string; itemName: string; revoked: boolean; value: null }[];
@@ -568,6 +568,7 @@ export function VaultClient() {
                   {canAdmin ? (
                     <form className="panel inline-form" onSubmit={(event) => void onShare(event)}>
                       <h2>Invitar</h2>
+                      <p className="note">Solo con alguien que ya tenga cuenta. Si todavía no la creó, pedile que se registre primero.</p>
                       <label className="field">
                         Email o id de usuario
                         <input name="grantee" required autoComplete="off" />
@@ -591,7 +592,10 @@ export function VaultClient() {
                         <div className="person" key={share.id}>
                           <div>
                             <strong>{share.granteeEmail}</strong>
-                            <div className="tag">{share.permission === "admin" ? "admin" : "uso"}</div>
+                            <div className="tag">
+                              {share.permission === "admin" ? "admin" : "uso"}
+                              {share.active ? "" : " · inactivo, volvé a compartir"}
+                            </div>
                           </div>
                           <button className="btn-danger" type="button" disabled={busy === share.id} onClick={() => void removeShare(share.id)}>
                             Quitar

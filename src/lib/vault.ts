@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { folderAccess, itemAccess, requireAdminFolder, requireAdminItem } from "./access";
 import { audit } from "./audit";
@@ -10,6 +10,7 @@ import { isUniqueViolation } from "./http";
 import { canAdminister } from "./permissions";
 import { maxAccess } from "./permissions";
 import { consumeRateLimit } from "./rate-limit";
+import { closeRequestsForRevokedShare } from "./requests";
 import { envBinding, folder, item, share, user } from "./schema";
 import type { Access, Actor, ItemKind } from "./types";
 import { apiKeyHint, sshFingerprint } from "./validate";
@@ -81,20 +82,31 @@ function fingerprintFor(kind: ItemKind, secret: string, publicKey?: string) {
   return fingerprint;
 }
 
+// Mismo mensaje para "no hay cuenta con ese email" y "no hay usuario con ese id".
+export const GRANTEE_NOT_FOUND =
+  "No se pudo compartir. La persona tiene que crear su cuenta en Llaverito antes de que la invites.";
+
+// Solo se comparte con una cuenta que ya existe. No se crean invitaciones pendientes:
+// sin verificación de email, quien registre primero ese email se las quedaría.
 async function resolveGrantee(actor: Actor, input: string) {
   const trimmed = input.trim();
+  const db = await getDb();
+  let found: { id: string; email: string } | undefined;
   if (trimmed.includes("@")) {
     const email = trimmed.toLowerCase();
     if (!z.string().email().safeParse(email).success) throw new HttpError(400, "Email inválido");
-    if (email === actor.email) throw new HttpError(400, "No podés compartirlo con vos");
-    return email;
+    if (email === actor.email.toLowerCase()) throw new HttpError(400, "No podés compartirlo con vos");
+    [found] = await db
+      .select({ id: user.id, email: user.email })
+      .from(user)
+      .where(sql`lower(${user.email}) = ${email}`)
+      .limit(1);
+  } else {
+    [found] = await db.select({ id: user.id, email: user.email }).from(user).where(eq(user.id, trimmed)).limit(1);
   }
-  const db = await getDb();
-  const [found] = await db.select({ email: user.email }).from(user).where(eq(user.id, trimmed)).limit(1);
-  if (!found) throw new HttpError(404, "No hay un usuario con ese id");
-  const email = found.email.toLowerCase();
-  if (email === actor.email) throw new HttpError(400, "No podés compartirlo con vos");
-  return email;
+  if (!found) throw new HttpError(404, GRANTEE_NOT_FOUND);
+  if (found.id === actor.id) throw new HttpError(400, "No podés compartirlo con vos");
+  return { userId: found.id, email: found.email.toLowerCase() };
 }
 
 export async function listVault(actor: Actor) {
@@ -104,7 +116,7 @@ export async function listVault(actor: Actor) {
     .select({ row: folder, permission: share.permission })
     .from(share)
     .innerJoin(folder, eq(share.resourceId, folder.id))
-    .where(and(eq(share.resourceType, "folder"), eq(share.granteeEmail, actor.email)));
+    .where(and(eq(share.resourceType, "folder"), eq(share.granteeUserId, actor.id)));
   const folderMap = new Map<string, { row: (typeof owned)[number]; access: Access }>();
   for (const row of owned) folderMap.set(row.id, { row, access: "owner" });
   for (const shared of sharedFolders) {
@@ -123,7 +135,7 @@ export async function listVault(actor: Actor) {
     .select({ ...publicItemColumns, permission: share.permission })
     .from(share)
     .innerJoin(item, eq(share.resourceId, item.id))
-    .where(and(eq(share.resourceType, "item"), eq(share.granteeEmail, actor.email)));
+    .where(and(eq(share.resourceType, "item"), eq(share.granteeUserId, actor.id)));
   const items = new Map<string, ReturnType<typeof toPublicItem>>();
   for (const row of folderItems) {
     items.set(row.id, toPublicItem(row, folderMap.get(row.folderId)?.access ?? "use", false));
@@ -365,13 +377,18 @@ export async function listShares(actor: Actor, resourceType: "folder" | "item", 
     .select({
       id: share.id,
       granteeEmail: share.granteeEmail,
+      granteeUserId: share.granteeUserId,
       permission: share.permission,
       createdAt: share.createdAt,
     })
     .from(share)
     .where(and(eq(share.resourceType, resourceType), eq(share.resourceId, resourceId)))
     .orderBy(desc(share.createdAt));
-  return rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) }));
+  return rows.map(({ granteeUserId, ...row }) => ({
+    ...row,
+    active: granteeUserId !== null,
+    createdAt: iso(row.createdAt),
+  }));
 }
 
 export async function createShare(
@@ -381,7 +398,7 @@ export async function createShare(
 ) {
   if (input.resourceType === "folder") await requireAdminFolder(actor, input.resourceId);
   else await requireAdminItem(actor, input.resourceId);
-  const granteeEmail = await resolveGrantee(actor, input.grantee);
+  const grantee = await resolveGrantee(actor, input.grantee);
   const db = await getDb();
   const [saved] = await db
     .insert(share)
@@ -389,14 +406,16 @@ export async function createShare(
       id: crypto.randomUUID(),
       resourceType: input.resourceType,
       resourceId: input.resourceId,
-      granteeEmail,
+      granteeEmail: grantee.email,
+      granteeUserId: grantee.userId,
       permission: input.permission,
       createdBy: actor.id,
       createdAt: new Date(),
     })
     .onConflictDoUpdate({
       target: [share.resourceType, share.resourceId, share.granteeEmail],
-      set: { permission: input.permission },
+      // Una fila legada sin cuenta se reactiva solo al volver a compartir con la cuenta que existe hoy.
+      set: { permission: input.permission, granteeUserId: grantee.userId },
     })
     .returning({
       id: share.id,
@@ -423,6 +442,9 @@ export async function deleteShare(actor: Actor, shareId: string, request?: Reque
   if (row.resourceType === "folder") await requireAdminFolder(actor, row.resourceId);
   else await requireAdminItem(actor, row.resourceId);
   await db.delete(share).where(eq(share.id, shareId));
+  if (row.granteeUserId) {
+    await closeRequestsForRevokedShare(row.granteeUserId, row.resourceType, row.resourceId);
+  }
   await audit({
     actorId: actor.id,
     action: "share.delete",

@@ -1,6 +1,6 @@
 import { statements } from "./statements";
 
-export const SCHEMA_MIGRATION_ID = "0001_init";
+export const SCHEMA_MIGRATION_ID = "0002_share_grantee_user";
 
 export type SqlQuery = (statement: string, params?: unknown[]) => Promise<unknown>;
 

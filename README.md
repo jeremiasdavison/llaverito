@@ -10,6 +10,7 @@ Cofre para que un agente use API keys y claves SSH sin ver el secreto. La person
 4. En **Seguridad**, activá el autenticador (TOTP) y guardá los códigos de respaldo. Sin eso no se puede revelar, rotar un secreto, aprobar, compartir ni crear un token.
 5. **Nuevo secreto**: nombre, tipo API key, y el valor. Guardar. La lista muestra una pista (`••••` y los últimos 4), no el secreto.
 6. **Mostrar una vez** pide la contraseña y el código de 6 dígitos, revela el secreto en esa pantalla y lo anota en Auditoría.
+7. Para compartir una carpeta, la otra persona tiene que **crear su cuenta antes**. Compartir con un email sin cuenta no crea una invitación pendiente: devuelve el mismo error genérico que un id inexistente. El permiso queda atado a esa cuenta (su id), no al texto del email.
 
 ## Variables
 
@@ -77,5 +78,7 @@ Una carpeta de proyecto puede mapear elementos a variables (`OPENAI_API_KEY`). *
 - El límite de intentos vive en Postgres y, en el mismo proceso, en memoria. Si Postgres no responde, el intento se rechaza. No hay un WAF aparte.
 - No hay rotación de `ENCRYPTION_KEY` ni borrado criptográfico más allá de pisar el sobre al revocar.
 - El token de agente vence a los 90 días, se puede rotar y acepta los permisos `read`, `request` y `redeem`. La federación OIDC queda para después.
-- Compartir con un email crea la invitación aunque esa persona todavía no tenga cuenta.
+- Solo se comparte con cuentas que ya existen y el acceso sigue al id de esa cuenta. Sin verificación de email todavía queda un riesgo: alguien puede registrar de antemano la cuenta de otra persona (su email) y recibir lo que después se comparta con ese email. Antes de compartir algo sensible, confirmá por otro canal que la cuenta es de quien creés. La verificación de email (`requireEmailVerification`) y las invitaciones con token de un solo uso quedan para cuando haya un proveedor de correo.
+- Los compartidos viejos hechos a un email que todavía no tenía cuenta quedaron inactivos con la migración `0002_share_grantee_user`: no dan acceso aunque esa cuenta exista hoy. Para reactivarlos, volvé a compartir.
+- Quitar un compartido anula las solicitudes pendientes y los grants aprobados de esa persona sobre esos recursos. Aprobar y canjear vuelven a revisar que quien pidió siga teniendo acceso.
 - No es un producto auditado. Sirve para guardar las primeras credenciales con cifrado, sesión y aprobación humana.

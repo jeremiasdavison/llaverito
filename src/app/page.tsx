@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Mark } from "@/components/mark";
 
+export const dynamic = "force-dynamic";
+
 export default function HomePage() {
   return (
     <main className="landing">
@@ -45,7 +47,7 @@ export default function HomePage() {
         <article className="card">
           <p className="eyebrow">Compartir</p>
           <h2>Un permiso, no un archivo</h2>
-          <p>Invitar por email da uso o administración. El mensaje no lleva el texto plano.</p>
+          <p>Invitar a una cuenta que ya existe da uso o administración. El permiso no lleva el texto plano.</p>
         </article>
       </section>
       <section className="steps" id="como-funciona" aria-label="Cómo funciona">

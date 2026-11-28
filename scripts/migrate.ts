@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { neon } from "@neondatabase/serverless";
 import { databaseUrlFrom } from "../src/lib/database-url.ts";
-import { applySchemaStatements } from "../src/lib/migrate-sql.ts";
+import { applySchemaStatements, SCHEMA_MIGRATION_ID } from "../src/lib/migrate-sql.ts";
 
 function loadLocalEnv() {
   try {
@@ -50,7 +50,7 @@ if (!url) {
 try {
   const sql = neon(url);
   await applySchemaStatements((statement, params) => sql.query(statement, params));
-  console.log("Esquema listo (0001_init).");
+  console.log(`Esquema listo (${SCHEMA_MIGRATION_ID}).`);
 } catch (error) {
   console.error(`No se pudo aplicar el esquema: ${publicError(error)}`);
   process.exit(1);

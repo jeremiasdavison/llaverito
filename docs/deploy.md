@@ -2,7 +2,7 @@
 
 Producción: https://llaverito-six.vercel.app
 
-Conectar Neon y cargar las variables alcanza para crear una cuenta. El build aplica el esquema si ve `DATABASE_URL`. Si la variable solo existe en runtime, el mismo SQL corre en el primer request (`/api/health` incluido). Las sentencias son `IF NOT EXISTS` y quedan anotadas en `schema_migration` como `0001_init`.
+Conectar Neon y cargar las variables alcanza para crear una cuenta. El build aplica el esquema si ve `DATABASE_URL`. Si la variable solo existe en runtime, el mismo SQL corre en el primer request (`/api/health` incluido). Las sentencias son `IF NOT EXISTS` y quedan anotadas en `schema_migration` (hoy `0002_share_grantee_user`, que agrega `share.grantee_user_id` y deja inactivos los compartidos a emails que no tenían cuenta al compartir).
 
 ## Variables
 
