@@ -178,7 +178,7 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
     return (
       <main className="auth-split">
         {story}
-        <form className="auth-card" onSubmit={(event) => void onCode(event)} noValidate aria-busy={pending}>
+        <form className="auth-card" method="post" onSubmit={(event) => void onCode(event)} noValidate aria-busy={pending}>
           <Mark />
           <p className="eyebrow">Verificación en dos pasos</p>
           <h1>Segundo factor</h1>
@@ -222,7 +222,7 @@ export function AuthForm({ mode, next }: { mode: "sign-in" | "sign-up"; next: st
   return (
     <main className="auth-split">
       {story}
-      <form className="auth-card" onSubmit={onSubmit} noValidate aria-busy={pending}>
+      <form className="auth-card" method="post" onSubmit={onSubmit} noValidate aria-busy={pending}>
         <Mark />
         <p className="eyebrow">{creating ? "Cuenta nueva" : "Sesión"}</p>
         <h1>{creating ? "Crear cuenta" : "Entrar"}</h1>

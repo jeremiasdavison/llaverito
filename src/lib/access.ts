@@ -18,7 +18,7 @@ export async function folderAccess(actor: Actor, folderId: string) {
       and(
         eq(share.resourceType, "folder"),
         eq(share.resourceId, folderId),
-        eq(share.granteeEmail, actor.email),
+        eq(share.granteeUserId, actor.id),
       ),
     )
     .limit(1);
@@ -40,7 +40,7 @@ export async function itemAccess(actor: Actor, itemId: string) {
     .select({ permission: share.permission })
     .from(share)
     .where(
-      and(eq(share.resourceType, "item"), eq(share.resourceId, itemId), eq(share.granteeEmail, actor.email)),
+      and(eq(share.resourceType, "item"), eq(share.resourceId, itemId), eq(share.granteeUserId, actor.id)),
     )
     .limit(1);
   if (direct) access = maxAccess(access, direct.permission === "admin" ? "admin" : "use");

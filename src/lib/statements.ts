@@ -174,4 +174,10 @@ export const statements = [
   `ALTER TABLE agent_token ALTER COLUMN scopes SET DEFAULT 'read,request,redeem'`,
   `ALTER TABLE agent_token ALTER COLUMN scopes SET NOT NULL`,
   `ALTER TABLE agent_token ALTER COLUMN expires_at SET NOT NULL`,
+  // El acceso por compartido se ata a la cuenta que existía al compartir, no al texto del email.
+  `ALTER TABLE share ADD COLUMN IF NOT EXISTS grantee_user_id text REFERENCES "user"(id) ON DELETE CASCADE`,
+  `CREATE INDEX IF NOT EXISTS share_grantee_user_idx ON share (grantee_user_id)`,
+  // Backfill: solo cuentas creadas antes que el compartido. Una cuenta registrada después con ese
+  // email (invitación pendiente o email ocupado) no hereda nada y la fila queda inactiva.
+  `UPDATE share SET grantee_user_id = u.id FROM "user" u WHERE share.grantee_user_id IS NULL AND lower(u.email) = lower(share.grantee_email) AND u."createdAt" <= share.created_at`,
 ];

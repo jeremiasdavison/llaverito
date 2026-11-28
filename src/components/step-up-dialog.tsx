@@ -55,6 +55,7 @@ export function StepUpDialog() {
     <div className="overlay">
       <form
         className="panel"
+        method="post"
         role="dialog"
         aria-modal="true"
         aria-labelledby="step-up-title"

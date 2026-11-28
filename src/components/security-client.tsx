@@ -75,7 +75,7 @@ export function SecurityClient() {
       {error ? <p className="alert" role="alert">{error}</p> : null}
       <p className="tag">{enabled ? "segundo factor activo" : "segundo factor apagado"}</p>
       {!enabled && !uri ? (
-        <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void enable(event)}>
+        <form className="panel" method="post" style={{ padding: 16 }} onSubmit={(event) => void enable(event)}>
           <h2>Activar autenticador</h2>
           <label>
             Contraseña actual
@@ -85,7 +85,7 @@ export function SecurityClient() {
         </form>
       ) : null}
       {uri ? (
-        <form className="panel stack" style={{ padding: 16 }} onSubmit={(event) => void confirm(event)}>
+        <form className="panel stack" method="post" style={{ padding: 16 }} onSubmit={(event) => void confirm(event)}>
           <h2>Cargalo en la app</h2>
           <p className="note">Pegá la URI o el secreto en el autenticador. No uses un generador de QR externo.</p>
           <textarea className="mono" readOnly value={uri} />
@@ -108,7 +108,7 @@ export function SecurityClient() {
         </form>
       ) : null}
       {enabled ? (
-        <form className="panel" style={{ padding: 16 }} onSubmit={(event) => void disable(event)}>
+        <form className="panel" method="post" style={{ padding: 16 }} onSubmit={(event) => void disable(event)}>
           <h2>Desactivar</h2>
           <label>
             Contraseña actual
